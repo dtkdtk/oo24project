@@ -1,0 +1,18 @@
+{
+  "type": "module",
+  "name": "oo24project",
+  "version": "1.0.0",
+  "description": "[TOY] Bytecode VM written in JavaScript",
+  "main": "Source/oo24-cli.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "toy",
+    "assembler",
+    "bytecode",
+    "vm"
+  ],
+  "author": "Demyan 'dtkdtk0' Tk.",
+  "license": "MIT"
+}
