@@ -130,6 +130,12 @@ export class LLL_STATE {
       return Num;
     },
 
+    /**
+     * Конвертирует указанное значение в нужный Runtime-тип данных.
+     * Грубо говоря, "парсит" строку и пытается конвертировать в числовой тип данных.
+     * @param {string} Value
+     * @returns {prim}
+     */
     ResolveValue,
   };
 
