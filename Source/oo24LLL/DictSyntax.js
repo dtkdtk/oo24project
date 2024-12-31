@@ -2,8 +2,8 @@
  * @internal
  * Словарь СЛОВ СИНТАКСИСА.
  * 
- * @type {Map<string, (S: import("./Interpreter").LLL_STATE) => unknown>}
+ * @type {Map<string, import("./Interpreter").NativeJsFunction>}
  */
 export default new Map(Object.entries({
-
+  SYNTWORD: () => {},
 }));

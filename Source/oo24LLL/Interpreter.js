@@ -1,6 +1,9 @@
 import assert from "node:assert";
-import DictSyntax from "./DictSyntax";
-import DictStd from "./DictStd";
+import DictSyntax from "./DictSyntax.js";
+import DictStd from "./DictStd.js";
+import * as LibUtils from "../Utils.js";
+import * as LibUtilsTy from "../Utils-typed.js";
+import { _AuxGetStateStace } from "./AuxStateTrace.js";
 
 /** Начало комментария */
 const TK_COMMENT_START = ";";
@@ -9,11 +12,7 @@ const TK_COMMENT_START = ";";
 
 /* TYPES: */
 /**
- * @typedef {string|number} prim
- */
-/**
- * @template {} T
- * @typedef {Pick<Array<T>, "push" | "pop" | "length"> & {[i: number]: T}} IStack
+ * @typedef {string | number} prim
  */
 /**
  * @typedef {(S: LLL_STATE, ws: WordStream) => unknown} NativeJsFunction
@@ -39,11 +38,6 @@ export function LLL_EXECUTE(AllCode, S = new LLL_STATE()) {
  * Состояние интерпретатора LLL.
  */
 export class LLL_STATE {
-  /**
-   * @type {string[]}
-   * @readonly
-   */
-  StringsTable = [];
 
   /**
    * @type {Record<string, prim>}
@@ -58,29 +52,93 @@ export class LLL_STATE {
   Pragmas = {};
 
   /**
-   * @type {IStack<prim>}
+   * @type {string[]}
    * @readonly
    */
-  Stack = [];
+  StringsTable = [];
+
+  /**
+   * @type {LibUtilsTy.IStack<prim>}
+   * @readonly
+   */
+  Stack = new LibUtilsTy.IStack();
 
   /**
    * Стек *замыканий*: областей видимости слов(функций) и переменных.
-   * @type {IStack<Map<string, prim|NativeJsFunction>>}
+   * @type {LibUtilsTy.IStack<Map<string, prim | NativeJsFunction | WordStream>>}
    * @readonly
    */
-  Closures = [ //Замыкания по умолчанию:
+  Closures = new LibUtilsTy.IStack( //Замыкания по умолчанию:
     DictSyntax,
     DictStd,
-  ]; //Глобальное будет добавлено в 'RecursiveInterpret'
+    new Map(),
+  );
 
   /**
    * Набор вспомогательных функций.
    * @readonly
    */
-  aux = {
-    //Использовать исключительно стрелочные функции!!!
+  aux = { //Использовать исключительно стрелочные функции!!!
 
+    /**
+     * Выбрасывает RuntimeException.
+     * @param {string} Msg
+     * @returns {never}
+     */
+    ThrowRuntimeExc: (Msg) => {
+      console.error("LLL Runtime exception: " + Msg + "\n");
+      console.error(this.aux.GetStateTrace());
+      throw "LLL RuntimeException";
+    },
+
+    /**
+     * Специализация `ThrowRuntimeExc` с пояснением места, где возникла ошибка.
+     * @param {string} Where 
+     * @param {string} Msg 
+     * @returns {never}
+     */
+    ThrowRuntimeExc_At: (Where, Msg) => this.aux.ThrowRuntimeExc(`'${Where}': ${Msg}`),
+
+    /**
+     * Проверяет, достаточно ли значений в стеке.
+     * @param {number} Needed
+     * @param {string} ThisFnName
+     * @returns {void | never}
+     */
+    AssertStackLength: (Needed) => {
+      if (this.Stack.length < Needed)
+      this.aux.ThrowRuntimeExc_At(this.CurrentInterpretingWord, "Not enough values on stack."
+        + `\n\tExpected '${Needed}', stack contains '${this.Stack.length}'.`)
+    },
+
+    /**
+     * Возвращает `LLL_STATE`, готовую к выводу в консоль.
+     * @returns {string}
+     */
+    GetStateTrace: () => _AuxGetStateStace(this),
+
+    /**
+     * Конвертирует значение в число.
+     * При неудаче выкидывает исключение.
+     * @param {prim} Val
+     * @returns {number | never}
+     */
+    AsNumber: (Val) => {
+      const Num = Number(Val);
+      if (isNaN(Num))
+        return this.aux.ThrowRuntimeExc_At(this.CurrentInterpretingWord, `Expected number, received '${Val}'.`);
+      return Num;
+    },
+
+    ResolveValue,
   };
+
+  /**
+   * Интерпретируемое в данный момент слово.
+   * @type {string}
+   * @readonly
+   */
+  CurrentInterpretingWord; //Ответственность закреплена за 'RecursiveInterpret'
 }
 
 
@@ -120,7 +178,7 @@ function InterpretPrelude(AllCode, S) {
         return InterpretStringsTable(NewCode, S);
       }
       default:
-        throw new LLL_InterpreterError(`Ошибка при парсинге Прелюдии: Иллегальная инструкция: '${ParsedLine[0]}'`);
+        return Line + "\n" + AllCode; //значит, мы уже вышли из прелюдии
     }
   }
 }
@@ -163,10 +221,10 @@ function InterpretStringsTable(AllCode, S) {
  * @param {WordStream} ws 
  */
 function RecursiveInterpret(S, ws) {
-  const { tkGrab, tkRefillLineBuff: tkHasTokens } = ws;
-  interpreting: while (tkHasTokens()) {
-    const Tk = tkGrab();
-    findingDefinition: for (let i = S.Closures.length - 1; i > 0; i--) {
+  interpreting: while (ws.tkRefillLineBuff()) {
+    const Tk = ws.tkGrab();
+    S.CurrentInterpretingWord = Tk;
+    findingDefinition: for (let i = S.Closures.length - 1; i >= 0; i--) {
       const TheClosure = S.Closures[i];
       const Definition = TheClosure.get(Tk);
 
@@ -174,20 +232,23 @@ function RecursiveInterpret(S, ws) {
         case "undefined": //не нашли, ищем дальше
           continue findingDefinition;
 
-        case "string": //нашли, интерпретируем
-          RecursiveInterpret(S, Definition);
+        case "number": //это числовое значение => уверенно кидаем в стек
+        case "string": //нашли строку / НЕленивое значение
+          S.Stack.push(Definition);
           continue interpreting;
 
         case "function": //нашли, нативный JS
           Definition(S, ws);
           continue interpreting;
 
-        case "number": //это числовое значение => уверенно кидаем в стек
-          S.Stack.push(Tk);
-          continue interpreting;
+        case "object": //отложенное вычисление?..
+          if (Definition instanceof WordStream) {
+            RecursiveInterpret(S, Definition);
+          }
+          else continue findingDefinition;
       }
     }
-    S.Stack.push(Tk); //не нашли ни в одном замыкании => кидаем в стек "как есть"
+    S.Stack.push(ResolveValue(Tk)); //не нашли ни в одном замыкании => кидаем в стек "как есть"
   }
 }
 
@@ -233,10 +294,10 @@ class WordStream {
   }
 
   /** @type {string[]} */
-  #Lines = null;
+  #Lines = [];
 
   /** @type {string[]} */
-  #CurrentLine = null;
+  #CurrentLine = [];
 
   /**
    * @param {string} AllCode 
@@ -264,16 +325,15 @@ class WordStream {
   tkRefillLineBuff() {
     if (this.#EndOfCode()) return false;
     if (this.#CurrentLine.length == 0) {
-      this.#LineIndex++;
-      if (this.#EndOfCode()) return false;
-
-      let RawLine = this.#Lines[this.#CurrentLine];
+      let RawLine = this.#Lines[this.#LineIndex];
       RawLine = PrepareCodeLine(RawLine);
-      if (RawLine.length == 0) return this.#CheckLine();
+      this.#LineIndex++;
+      if (RawLine.length == 0) return this.tkRefillLineBuff();
 
       this.#CurrentLine = RawLine.split(/\s/).filter(word => word != "");
       return true;
     }
+    return true;
   }
 
   /**
