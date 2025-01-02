@@ -8,9 +8,9 @@
  */
 export function OmitKeysFrom(Source, ...Keys) {
   const Buf = {};
-  for (const K in Source)
-    if (!Keys.includes(K))
-      Buf[K] = Source[K];
+  for (const K in Source) //@ts-ignore
+    if (!Keys.includes(K)) //@ts-ignore
+      Buf[K] = Source[K]; //@ts-ignore
   return Buf;
 }
 
@@ -102,9 +102,10 @@ ClampNumber.OnlyMax = function(Max, Given) {
  */
 export function FitStringsInLength(Strings, TargetLength, DelimiterLength = 0) {
   if (Strings.length == 0) return [];
+  /** @type {string[][]} */
   const Buf = [[]];
   for (const Str of Strings) {
-    const CurrentLength = Buf[Buf.length - 1].reduce((accum, cur) => accum + cur, 0)
+    const CurrentLength = Buf[Buf.length - 1].reduce((accum, cur) => accum + cur.length, 0)
       + Buf[Buf.length - 1].length * DelimiterLength;
     if (CurrentLength + Str.length > TargetLength)
       Buf.push([Str]);
@@ -112,4 +113,28 @@ export function FitStringsInLength(Strings, TargetLength, DelimiterLength = 0) {
       Buf[Buf.length - 1].push(Str);
   }
   return Buf;
+}
+
+/**
+ * @param {string} Str 
+ * @param {string} Suffix 
+ * @returns {string}
+ */
+export function RemoveSuffix(Str, Suffix) {
+  const Index = Str.lastIndexOf(Suffix);
+  if (Index == -1)
+    return Str;
+  else
+    return Str.slice(0, Index);
+}
+
+
+
+/**
+ * Проверяет, является ли число целым.
+ * @param {number} maybeInteger 
+ * @returns {boolean}
+ */
+export function IsInteger(maybeInteger) {
+  return ~~maybeInteger == maybeInteger;
 }

@@ -2,10 +2,14 @@ import * as LibUtils from "../Utils.js";
 const TARGET_TERMINAL_WIDTH = 100;
 
 /**
+ * @typedef {import("./TheMachine.js").LLL_STATE} LLL_STATE
+ */
+
+/**
  * @private
  * Функция для красивой трассировки состояния интерпретатора.
  * 
- * @param {import("./Interpreter.js").LLL_STATE} S
+ * @param {LLL_STATE} S
  * @returns {string} 
  */
 export function _AuxGetStateStace(S) {

@@ -1,5 +1,5 @@
 export declare class IStack<T> {
-  constructor(...values?: T[]);
+  constructor(...values: T[]);
 
   [i: number]: T;
   readonly length: number;

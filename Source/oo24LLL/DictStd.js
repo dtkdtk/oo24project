@@ -2,7 +2,7 @@
  * @internal
  * Словарь стандартных (встроенных) функций.
  * 
- * @type {Map<string, import("./Interpreter").NativeJsFunction>}
+ * @type {Map<string, NativeJsFunction>}
  */
 export default new Map(Object.entries({
 
@@ -34,9 +34,9 @@ export default new Map(Object.entries({
    */
   concat: (S, ws) => {
     S.aux.AssertStackLength(2);
-    const Source = S.Stack.pop();
-    const Dest = S.Stack.pop();
-    S.Stack.push( String(Source).concat(Dest) );
+    const Source = S.aux.PopValue_String();
+    const Dest = S.aux.PopValue_String();
+    S.Stack.push(S.aux.RtvalueOf( Source.concat(Dest) ));
   },
 
   /**
@@ -57,33 +57,33 @@ export default new Map(Object.entries({
 
   sum: (S, ws) => {
     S.aux.AssertStackLength(2);
-    const From = S.aux.AsNumber(S.Stack.pop());
-    const To = S.aux.AsNumber(S.Stack.pop());
-    S.Stack.push( From + To );
+    const From = S.aux.PopValue_Integer();
+    const To = S.aux.PopValue_Integer();
+    S.Stack.push(S.aux.RtvalueOf( From + To ));
   },
   sub: (S, ws) => {
     S.aux.AssertStackLength(2);
-    const From = S.aux.AsNumber(S.Stack.pop());
-    const To = S.aux.AsNumber(S.Stack.pop());
-    S.Stack.push( From - To );
+    const From = S.aux.PopValue_Integer();
+    const To = S.aux.PopValue_Integer();
+    S.Stack.push(S.aux.RtvalueOf( From - To ));
   },
   mul: (S, ws) => {
     S.aux.AssertStackLength(2);
-    const From = S.aux.AsNumber(S.Stack.pop());
-    const To = S.aux.AsNumber(S.Stack.pop());
-    S.Stack.push( From * To );
+    const From = S.aux.PopValue_Integer();
+    const To = S.aux.PopValue_Integer();
+    S.Stack.push(S.aux.RtvalueOf( From * To ));
   },
   div: (S, ws) => {
     S.aux.AssertStackLength(2);
-    const From = S.aux.AsNumber(S.Stack.pop());
-    const To = S.aux.AsNumber(S.Stack.pop());
-    S.Stack.push( From / To );
+    const From = S.aux.PopValue_Integer();
+    const To = S.aux.PopValue_Integer();
+    S.Stack.push(S.aux.RtvalueOf( ~~(From / To) ));
   },
   mod: (S, ws) => {
     S.aux.AssertStackLength(2);
-    const From = S.aux.AsNumber(S.Stack.pop());
-    const To = S.aux.AsNumber(S.Stack.pop());
-    S.Stack.push( From % To );
+    const From = S.aux.PopValue_Integer();
+    const To = S.aux.PopValue_Integer();
+    S.Stack.push(S.aux.RtvalueOf( From % To ));
   },
 
 }));

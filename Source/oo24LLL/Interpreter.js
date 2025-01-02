@@ -1,24 +1,11 @@
-import assert from "node:assert";
-import DictSyntax from "./DictSyntax.js";
-import DictStd from "./DictStd.js";
-import * as LibUtils from "../Utils.js";
-import * as LibUtilsTy from "../Utils-typed.js";
-import { _AuxGetStateStace } from "./AuxStateTrace.js";
-
-/** Начало комментария */
-const TK_COMMENT_START = ";";
+import { LLL_STATE, _WordStream, _PrepareCodeLine } from "./TheMachine.js";
+import { RemoveSuffix } from "../Utils.js";
 
 
 
 /* TYPES: */
 /**
- * @typedef {string | number} prim
- */
-/**
- * @typedef {(S: LLL_STATE, ws: WordStream) => unknown} NativeJsFunction
- */
-/**
- * @typedef {"IgnoreWord"} KnownPragmaKeys
+ * @typedef {"IgnoreWord"} _KnownPragmaKeys
  */
 
 /**
@@ -28,123 +15,8 @@ export function LLL_EXECUTE(AllCode, S = new LLL_STATE()) {
   AllCode = InterpretPrelude(AllCode, S);
   if (AllCode.length == 0) return;
 
-  const TheStream = new WordStream(AllCode);
+  const TheStream = new _WordStream(AllCode);
   RecursiveInterpret(S, TheStream);
-}
-
-
-
-/**
- * Состояние интерпретатора LLL.
- */
-export class LLL_STATE {
-
-  /**
-   * @type {Record<string, prim>}
-   * @readonly
-   */
-  ScriptMetadata = {};
-
-  /**
-   * @type {}
-   * @readonly
-   */
-  Pragmas = {};
-
-  /**
-   * @type {string[]}
-   * @readonly
-   */
-  StringsTable = [];
-
-  /**
-   * @type {LibUtilsTy.IStack<prim>}
-   * @readonly
-   */
-  Stack = new LibUtilsTy.IStack();
-
-  /**
-   * Стек *замыканий*: областей видимости слов(функций) и переменных.
-   * @type {LibUtilsTy.IStack<Map<string, prim | NativeJsFunction | WordStream>>}
-   * @readonly
-   */
-  Closures = new LibUtilsTy.IStack( //Замыкания по умолчанию:
-    DictSyntax,
-    DictStd,
-    new Map(),
-  );
-
-  /**
-   * Набор вспомогательных функций.
-   * @readonly
-   */
-  aux = { //Использовать исключительно стрелочные функции!!!
-
-    /**
-     * Выбрасывает RuntimeException.
-     * @param {string} Msg
-     * @returns {never}
-     */
-    ThrowRuntimeExc: (Msg) => {
-      console.error("LLL Runtime exception: " + Msg + "\n");
-      console.error(this.aux.GetStateTrace());
-      throw "LLL RuntimeException";
-    },
-
-    /**
-     * Специализация `ThrowRuntimeExc` с пояснением места, где возникла ошибка.
-     * @param {string} Where 
-     * @param {string} Msg 
-     * @returns {never}
-     */
-    ThrowRuntimeExc_At: (Where, Msg) => this.aux.ThrowRuntimeExc(`'${Where}': ${Msg}`),
-
-    /**
-     * Проверяет, достаточно ли значений в стеке.
-     * @param {number} Needed
-     * @param {string} ThisFnName
-     * @returns {void | never}
-     */
-    AssertStackLength: (Needed) => {
-      if (this.Stack.length < Needed)
-      this.aux.ThrowRuntimeExc_At(this.CurrentInterpretingWord, "Not enough values on stack."
-        + `\n\tExpected '${Needed}', stack contains '${this.Stack.length}'.`)
-    },
-
-    /**
-     * Возвращает `LLL_STATE`, готовую к выводу в консоль.
-     * @returns {string}
-     */
-    GetStateTrace: () => _AuxGetStateStace(this),
-
-    /**
-     * Конвертирует значение в число.
-     * При неудаче выкидывает исключение.
-     * @param {prim} Val
-     * @returns {number | never}
-     */
-    AsNumber: (Val) => {
-      const Num = Number(Val);
-      if (isNaN(Num))
-        return this.aux.ThrowRuntimeExc_At(this.CurrentInterpretingWord, `Expected number, received '${Val}'.`);
-      return Num;
-    },
-
-    /**
-     * Конвертирует указанное значение в нужный Runtime-тип данных.
-     * Грубо говоря, "парсит" строку и пытается конвертировать в числовой тип данных.
-     * @param {string} Value
-     * @returns {prim}
-     */
-    ResolveValue,
-  };
-
-  /**
-   * Интерпретируемое в данный момент слово.
-   * @type {string}
-   * @readonly
-   */
-  CurrentInterpretingWord; //Ответственность закреплена за 'RecursiveInterpret'
 }
 
 
@@ -165,18 +37,16 @@ function InterpretPrelude(AllCode, S) {
   while (AllCode.length > 0) {
     let [Line, ...OtherLines] = AllCode.split("\n");
     AllCode = OtherLines.join("\n");
-    Line = PrepareCodeLine(Line);
+    Line = _PrepareCodeLine(Line);
     if (Line.length == 0) continue;
     
     const ParsedLine = Line.split(" ");
     switch (ParsedLine[0]) {
       case "META": {
-        assert(ParsedLine.length > 2, "Неправильное использование директивы 'META'. Ожидался ключ и значение поля.");
+        S.aux.Assert_At("<prelude>", ParsedLine.length > 2, "Incorrect use of 'META' directive. Expected a field key and value.");
         let [Key, Value] = ParsedLine.slice(1);
-        Value = ResolveValue(Value);
-        Key = Key.split(TK_COMMENT_START);
-        Key = removeSuffix(Key, ":");
-        S.ScriptMetadata[Key] = ResolveValue(Value);
+        Key = RemoveSuffix(Key, ":");
+        S.ScriptMetadata[Key] = ParseValue(S, Value);
         break;
       }
       case "STRINGS-TABLE:": {
@@ -187,6 +57,7 @@ function InterpretPrelude(AllCode, S) {
         return Line + "\n" + AllCode; //значит, мы уже вышли из прелюдии
     }
   }
+  throw new Error("Impossible error");
 }
 
 
@@ -200,7 +71,7 @@ function InterpretPrelude(AllCode, S) {
 function InterpretStringsTable(AllCode, S) {
   //ВНИМАНИЕ! Символ '\n' пока не работает.
   //Думаю, подстановку (с учётом терминации) реального перевода строки
-  // вместо этого символа, стоит ввести в 'ResolveValue'
+  // вместо этого символа стоит ввести в 'ParseValue()'
 
   while (AllCode.length > 0) {
     let [Line, ...OtherLines] = AllCode.split("\n\n");
@@ -224,7 +95,7 @@ function InterpretStringsTable(AllCode, S) {
 /**
  * Рекурсивный интерпретатор **И ИСПОЛНИТЕЛЬ** основной части кода.
  * @param {LLL_STATE} S 
- * @param {WordStream} ws 
+ * @param {_WordStream} ws 
  */
 function RecursiveInterpret(S, ws) {
   interpreting: while (ws.tkRefillLineBuff()) {
@@ -248,122 +119,32 @@ function RecursiveInterpret(S, ws) {
           continue interpreting;
 
         case "object": //отложенное вычисление?..
-          if (Definition instanceof WordStream) {
+          if (Definition instanceof _WordStream) {
             RecursiveInterpret(S, Definition);
           }
           else continue findingDefinition;
       }
     }
-    S.Stack.push(ResolveValue(Tk)); //не нашли ни в одном замыкании => кидаем в стек "как есть"
+    S.Stack.push(ParseValue(S, Tk)); //не нашли ни в одном замыкании => кидаем в стек "как есть"
   }
 }
 
 
 
 /**
- * Вырезает комментарии, лишние пробелы и т.д.
- * @param {string} Line 
- * @returns {string}
+ * Парсит значение и конвертирует его в runtime-тип данных.
+ * @param {LLL_STATE} S
+ * @param {string} Value 
+ * @returns {llval_ty}
  */
-function PrepareCodeLine(Line) {
-  return Line
-    .split(";", 1)[0] //строчные комментарии
-    .replaceAll(/\(.*?\)/g, '') //встраиваемые комментарии
-    .replaceAll(/( )+/g, ' ') //двойные пробелы
-    .trim(); //лишние пробелы в начале/конце
-}
-
-/**
- * Конвертирует указанное значение в нужный Runtime-тип данных.
- * Грубо говоря, "парсит" строку и пытается конвертировать в числовой тип данных.
- * @param {string} Value
- * @returns {prim}
- */
-function ResolveValue(Value) {
+function ParseValue(S, Value) {
   const AsNumber = Number(Value);
   if (!isNaN(AsNumber))
-    return AsNumber;
-  else
-    return Value;
-}
-
-
-
-/**
- * Поток СЛОВ.
- * Специализирован под LLL.
- */
-class WordStream {
-  #LineIndex = 0;
-  get LineIndex() {
-    return this.#LineIndex;
-  }
-
-  /** @type {string[]} */
-  #Lines = [];
-
-  /** @type {string[]} */
-  #CurrentLine = [];
-
-  /**
-   * @param {string} AllCode 
-   */
-  constructor(AllCode) {
-    this.#Lines = AllCode.split(/\r?\n/);
-  }
-
-  /**
-   * Берёт текущий символ (со сдвигом потока).
-   * 
-   * Проверка конца кода на вашей совести!
-   * @returns {string}
-   */
-  tkGrab() {
-    return this.#CurrentLine.shift();
-  }
-
-  /**
-   * Проверяет наличие слов в `#CurrentLine`,
-   * иначе - дополняет **с вырезанием комментариев и лишних пробелов**
-   * @returns {boolean} НЕ достигнут ли конец кода?
-   * @mutates
-   */
-  tkRefillLineBuff() {
-    if (this.#EndOfCode()) return false;
-    if (this.#CurrentLine.length == 0) {
-      let RawLine = this.#Lines[this.#LineIndex];
-      RawLine = PrepareCodeLine(RawLine);
-      this.#LineIndex++;
-      if (RawLine.length == 0) return this.tkRefillLineBuff();
-
-      this.#CurrentLine = RawLine.split(/\s/).filter(word => word != "");
-      return true;
-    }
-    return true;
-  }
-
-  /**
-   * Больше кода нету?
-   */
-  #EndOfCode() {
-    return this.#LineIndex == this.#Lines.length
-      && this.#CurrentLine.length == 0;
-  }
+    return S.aux.RtvalueOf_Number(AsNumber);
+  else //однозначно строка; других значений у нас пока нет
+    return S.aux.RtvalueOf_String(Value);
 }
 
 
 
 class LLL_InterpreterError extends Error {};
-
-/**
- * @param {string} Str 
- * @param {string} Suffix 
- * @returns {string}
- */
-function removeSuffix(Str, Suffix) {
-  const Index = Str.lastIndexOf(Suffix);
-  if (Index == -1)
-    return Str;
-  else
-    return Str.slice(0, Index);
-}
