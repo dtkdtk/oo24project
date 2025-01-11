@@ -2,8 +2,7 @@ import "./Types.js";
 import * as libUtilsTy from "../Utils-typed.js";
 import DictStd from "./DictStd.js";
 import DictSyntax from "./DictSyntax.js";
-import { _AuxGetStateStace } from "./AuxStateTrace.js";
-import * as _AuxReprConversions from "./AuxReprConversions.js";
+import * as __Aux from "./aAux.js";
 
 
 
@@ -38,7 +37,7 @@ export class LLL_STATE {
 
   /**
    * Стек *замыканий*: областей видимости слов(функций) и переменных.
-   * @type {libUtilsTy.IStack<Map<string, llval_ty | NativeJsFunction | _WordStream>>}
+   * @type {libUtilsTy.IStack<Map<string, llval_ty | NativeJsFunction | TheReaderStream>>}
    * @readonly
    */
   Closures = new libUtilsTy.IStack( //Замыкания по умолчанию:
@@ -48,236 +47,268 @@ export class LLL_STATE {
   );
 
   /**
-   * Набор вспомогательных функций.
-   * @readonly
-   */
-  aux = { //Использовать исключительно стрелочные функции!!!
-
-    /**
-     * Выбрасывает RuntimeException.
-     * @param {string} Msg
-     * @returns {never}
-     */
-    ThrowRuntimeExc: (Msg) => {
-      console.error("LLL Runtime exception: " + Msg + "\n");
-      console.error(this.aux.GetStateTrace());
-      throw "LLL RuntimeException";
-    },
-    /**
-     * Специализация `ThrowRuntimeExc` с пояснением места, где возникла ошибка.
-     * @param {string} Where 
-     * @param {string} Msg 
-     * @returns {never}
-     */
-    ThrowRuntimeExc_At: (Where, Msg) =>
-      this.aux.ThrowRuntimeExc(`'${Where}': ${Msg}`),
-
-    /**
-     * @param {boolean} Condition 
-     * @param {string} ErrorMsg 
-     * @returns {never | void}
-     */
-    Assert: (Condition, ErrorMsg) =>
-      !Condition ? this.aux.ThrowRuntimeExc(ErrorMsg) : undefined,
-    /**
-     * Специализация `Assert` с пояснением места, где выполняется ассерт.
-     * @param {string} Where 
-     * @param {boolean} Condition 
-     * @param {string} ErrorMsg 
-     * @returns {never | void}
-     */
-    Assert_At: (Where, Condition, ErrorMsg) =>
-      !Condition ? this.aux.ThrowRuntimeExc_At(Where, ErrorMsg) : undefined,
-
-    /**
-     * Проверяет, достаточно ли значений в стеке.
-     * @param {number} Needed
-     * @returns {void | never}
-     */
-    AssertStackLength: (Needed) => {
-      if (this.Stack.length < Needed)
-      this.aux.ThrowRuntimeExc_At(this.CurrentInterpretingWord, "Not enough values on stack."
-        + `\n\tExpected '${Needed}', stack contains '${this.Stack.length}'.`)
-    },
-
-    /**
-     * Возвращает `LLL_STATE`, готовую к выводу в консоль.
-     * @returns {string}
-     * @see {@link _AuxGetStateStace() source}
-     */
-    GetStateTrace: () => _AuxGetStateStace(this), //extern
-
-    /**
-     * Конвертирует указанное представление в runtime-значение.
-     * 
-     * *Представление* -> __*Значение*__
-     * @param {llrepr_ANY_ty} Repr
-     * @returns {llval_ty}
-     * @see {@link _AuxReprConversions.RtvalueOf() source}
-     */
-    RtvalueOf: _AuxReprConversions.RtvalueOf.bind(this), //extern
-    /**
-     * Специализация {@link RtvalueOf()} для чисел.
-     * 
-     * *Представление* -> __*Значение*__
-     * @param {number} NumRepr 
-     * @returns {llval_ty}
-     * @see {@link _AuxReprConversions.RtvalueOf_Number() source}
-     */
-    RtvalueOf_Number: _AuxReprConversions.RtvalueOf_Number.bind(this), //extern
-    /**
-     * Специализация {@link RtvalueOf()} для строк.
-     * 
-     * *Представление* -> __*Значение*__
-     * @param {string} StrRepr 
-     * @returns {llval_ty}
-     * @see {@link _AuxReprConversions.RtvalueOf_String() source}
-     */
-    RtvalueOf_String: _AuxReprConversions.RtvalueOf_String.bind(this), //extern
-
-    /**
-     * Конвертирует runtime-значение в целое число.
-     * 
-     * *Значение* -> __*Представление*__
-     * @param {llval_ty} Rtvalue
-     * @returns {number | never}
-     * @see {@link _AuxReprConversions.ReprAs_Integer() source}
-     */
-    ReprAs_Integer: _AuxReprConversions.ReprAs_Integer.bind(this), //extern
-    /**
-     * Конвертирует runtime-значение в число с плавающей точкой.
-     * 
-     * *Значение* -> __*Представление*__
-     * @param {llval_ty} Rtvalue
-     * @returns {number | never}
-     * @see {@link _AuxReprConversions.ReprAs_Float() source}
-     */
-    ReprAs_Float: _AuxReprConversions.ReprAs_Float.bind(this),
-    /**
-     * Конвертирует runtime-значение в UTF-8 строку.
-     * 
-     * *Значение* -> __*Представление*__
-     * @param {llval_ty} Rtvalue
-     * @returns {string | never}
-     * @see {@link _AuxReprConversions.ReprAs_String() source}
-     */
-    ReprAs_String: _AuxReprConversions.ReprAs_String.bind(this),
-
-    /**
-     * Специализированный `IStack#pop()`, который автоматически преобразует
-     * *значение* в *представление* типа Integer.
-     * 
-     * Проверка длины стека - на вашей совести!
-     * @returns 
-     */
-    PopValue_Integer: () =>
-      this.aux.ReprAs_Integer(this.Stack.pop()),
-    /**
-     * Специализированный `IStack#pop()`, который автоматически преобразует
-     * *значение* в *представление* типа Float.
-     * 
-     * Проверка длины стека - на вашей совести!
-     * @returns 
-     */
-    PopValue_Float: () =>
-      this.aux.AsFloat(this.Stack.pop()),
-    /**
-     * Специализированный `IStack#pop()`, который автоматически преобразует
-     * *значение* в *представление* типа Float.
-     * 
-     * Проверка длины стека - на вашей совести!
-     * @returns 
-     */
-    PopValue_String: () =>
-      this.aux.AsString(this.Stack.pop()),
-  };
-
-  /**
    * Интерпретируемое в данный момент слово.
    * @type {string}
    */
   CurrentInterpretingWord = ""; //Ответственность закреплена за 'RecursiveInterpret'
+
+  /**
+   * Текущий поток ввода (`stdin`)
+   */
+  StdIN = process.stdin;
+
+  /**
+   * Текущий поток вывода (`stdout`)
+   */
+  StdOUT = process.stdout;
+
+  /**
+   * Текущий поток вывода ошибок (`stderr`)
+   */
+  StdERR = process.stderr;
 }
 
 
 
+/** Начало строчного комментария */
+const TK_COMMENT_LINE_START = ";";
+
+/** Начало встраиваемого комментария */
+const TK_INLINE_COMMENT_START = "(";
+
+/** Конец встраиваемого комментария */
+const TK_INLINE_COMMENT_END = ")";
+
 /**
- * Поток СЛОВ.
+ * Используется в функциях обработки токенов
+ * @type {Readonly<Record<"NOTHING" | "CONTINUE_LOOP" | "DRAIN_BUF", 0 | 1 | 2>>}
+ */
+const _HandleTokenResult = {
+  NOTHING:        0,
+  CONTINUE_LOOP:  1,
+  DRAIN_BUF:      2,
+};
+
+/**
+ * Читатель кода.
  * Специализирован под LLL.
  */
-export class _WordStream {
+export class TheReaderStream {
+
+  /** @type {libUtilsTy.IStack<WordDefinitionFragment>} */
+  #Bounds;
+
+  Pos = 0;
+
+  /**
+   * Осуществляет "переход" к интерпретации определения (некого фрагмента кода)
+   * @param {WordDefinitionFragment} Definition
+   */
+  GotoDefinition(Definition) {
+    this.#Bounds.push(Definition);
+    this.Pos = Definition.StartsAt;
+  }
+
+  /**
+   * Антоним {@link GotoDefinition()} - осуществляет ОБРАТНЫЙ переход,
+   * "выход" из интерпретации определения.
+   */
+  ExitDefinition() {
+    this.#Bounds.pop();
+    this.IsFragmentEnd = true;
+    if (this.#Bounds.length == 0)
+      this.IsCodeEnd = true;
+  }
+
   #LineIndex = 0;
   get LineIndex() {
     return this.#LineIndex;
   }
 
-  /** @type {string[]} */
-  #Lines = [];
+  /** Позиция перед извлечением единицы кода. @type {number} */
+  #PreviousPosition = 0;
 
-  /** @type {string[]} */
-  #CurrentLine = [];
+  /** @type {string} */
+  #Buf = "";
+
+  /** @type {string} */
+  #AllCode;
+
+  /** Внутреннее состояние интерпретатора. */
+  #InternalState = {
+    /** Режим интерпретации СТРОЧНОГО комментария? */
+    CommentLine: false,
+
+    /** Режим интерпретации ВСТРОЕННОГО комментария? */
+    InlineComment: false,
+  };
+
+  /** Мы достигли конца кода? */
+  IsCodeEnd = false;
+
+  /** Мы достигли конца ФРАГМЕНТА кода? (текущего интерпретируемого определения) */
+  IsFragmentEnd = false;
+
+  /** Дополнительные опции чтения/интерпретации. Регулируются извне. */
+  Options = {
+    /** Обрабатывать встраиваемые комментарии? */
+    HandleInlineComments: true,
+
+    /** Обрабатывать строчные комментарии? */
+    HandleCommentLines: true,
+
+    /**
+     * То, что считается "границей" текущей единицы кода: конец слова, конец строки, ...
+     * 
+     * Должен быть ОДИН символ. Иначе ба-бах.
+     */
+    UnitBound: " ",
+
+    /** Возвращать ли буфер (из {@link GrabUnit()}) при переходе на новую строку? */
+    DrainOnNewline: true,
+
+    /** Пропускать пустые единицы кода? */
+    SkipEmptyUnits: true,
+  };
 
   /**
    * @param {string} AllCode 
    */
   constructor(AllCode) {
-    this.#Lines = AllCode.split(/\r?\n/);
+    this.#AllCode = AllCode;
+    this.#Bounds = new libUtilsTy.IStack(new WordDefinitionFragment(0, AllCode.length - 1));
   }
 
   /**
-   * Берёт текущий символ (со сдвигом потока).
+   * *Извлекает из потока кода* текущую единицу кода (слово, строку и т.д.)
    * 
    * Проверка конца кода на вашей совести!
    * @returns {string}
    */
-  tkGrab() {
-    //@ts-ignore
-    return this.#CurrentLine.shift();
-  }
+  GrabUnit() {
+    this.IsFragmentEnd = false;
+    this.#PreviousPosition = this.Pos;
 
-  /**
-   * Проверяет наличие слов в `#CurrentLine`,
-   * иначе - дополняет **с вырезанием комментариев и лишних пробелов**
-   * @returns {boolean} НЕ достигнут ли конец кода?
-   * @mutates
-   */
-  tkRefillLineBuff() {
-    if (this.#EndOfCode()) return false;
-    if (this.#CurrentLine.length == 0) {
-      let RawLine = this.#Lines[this.#LineIndex];
-      RawLine = _PrepareCodeLine(RawLine);
-      this.#LineIndex++;
-      if (RawLine.length == 0) return this.tkRefillLineBuff();
+    while (this.Pos < this.#Bounds.peek().EndsAt) {
+      const Tk = this.#AllCode[this.Pos];
+      this.Pos++;
 
-      this.#CurrentLine = RawLine.split(/\s/).filter(word => word != "");
-      return true;
+      let CurrentStatus = this.#MaybeHandle_Newline(Tk)
+        || this.#MaybeHandle_CommentLine(Tk)
+        || this.#MaybeHandle_InlineComment(Tk)
+        || this.#MaybeHandle_InterpretingUnitBound(Tk);
+      if (CurrentStatus == 1) continue;
+      else if (CurrentStatus == 2) return this.#DrainBuffer();
+
+      this.#Buf += Tk;
     }
-    return true;
+
+    this.ExitDefinition();
+    return libUtilsTy.__Any;
   }
 
   /**
-   * Больше кода нету?
+   * Отменяет предыдущее извлечение из потока.
    */
-  #EndOfCode() {
-    return this.#LineIndex == this.#Lines.length
-      && this.#CurrentLine.length == 0;
+  RevertGrabbing() {
+   this.Pos = this.#PreviousPosition;
+  }
+
+  /**
+   * @returns {string}
+   */
+  #DrainBuffer() {
+    const Word = this.#Buf;
+    this.#Buf = "";
+    return Word;
+  }
+
+  /**
+   * Часть {@link GrabUnit()}, отвечающая за обработку переходов на новую строку.
+   * @param {string} Tk 
+   * @returns {0 | 1 | 2} `0` - ничего не найдено, идём дальше; `1` - обработано, начинаем новый цикл; `2` - делаем возврат из {@link GrabUnit()} (возвращаем буфер)
+   */
+  #MaybeHandle_Newline(Tk) {
+    if (Tk == "\n") {
+      this.#LineIndex++;
+      if (this.#Buf.length > 0 && this.Options.DrainOnNewline)
+        return _HandleTokenResult.DRAIN_BUF;
+      return _HandleTokenResult.CONTINUE_LOOP;
+    }
+    if (Tk == "\r")
+      return _HandleTokenResult.CONTINUE_LOOP;
+    return _HandleTokenResult.NOTHING;
+  }
+
+  #MaybeHandle_CommentLine(Tk) {
+    if (!this.Options.HandleCommentLines)
+      return _HandleTokenResult.NOTHING;
+
+    if (Tk == TK_COMMENT_LINE_START) { //начало коммента
+      this.#InternalState.CommentLine = true;
+      return _HandleTokenResult.CONTINUE_LOOP;
+    }
+    if (Tk == "\n") { //конец коммента
+      this.#InternalState.CommentLine = false;
+      if (this.#Buf.length > 0 && this.Options.DrainOnNewline)
+        return _HandleTokenResult.DRAIN_BUF; //начало строчного комментария = переход на новую строку.
+      return _HandleTokenResult.CONTINUE_LOOP;
+    }
+    if (this.#InternalState.CommentLine)
+      return _HandleTokenResult.CONTINUE_LOOP;
+    return _HandleTokenResult.NOTHING;
+  }
+
+  #MaybeHandle_InlineComment(Tk) {
+    if (!this.Options.HandleInlineComments)
+      return _HandleTokenResult.NOTHING;
+
+    if (Tk == TK_INLINE_COMMENT_START) { //начало коммента
+      this.#InternalState.InlineComment = true;
+      return _HandleTokenResult.CONTINUE_LOOP;
+    }
+    if (this.#InternalState.InlineComment && Tk == TK_INLINE_COMMENT_END) { //конец коммента
+      this.#InternalState.InlineComment = false;
+      return _HandleTokenResult.CONTINUE_LOOP;
+    }
+    if (this.#InternalState.InlineComment)
+      return _HandleTokenResult.CONTINUE_LOOP;
+    return _HandleTokenResult.NOTHING;
+  }
+
+  /**
+   * Граница интересующей нас единицы кода: пробела, перехода на новую строку и т.д.
+   */
+  #MaybeHandle_InterpretingUnitBound(Tk) {
+    if (Tk == this.Options.UnitBound) {
+      if (this.#Buf.length > 0 || !this.Options.SkipEmptyUnits)
+        return _HandleTokenResult.DRAIN_BUF;
+      return _HandleTokenResult.CONTINUE_LOOP;
+    }
+    return _HandleTokenResult.NOTHING;
   }
 }
 
 
 
-/** Начало комментария */
-const TK_COMMENT_START = ";";
-
 /**
- * Вырезает комментарии, лишние пробелы и т.д.
- * @param {string} Line 
- * @returns {string}
+ * Координаты (индексы) начала и конца фрагмента кода,
+ * являющимся определением некого слова.
  */
-export function _PrepareCodeLine(Line) {
-  return Line
-    .split(TK_COMMENT_START, 1)[0] //строчные комментарии
-    .replaceAll(/\(.*?\)/g, '') //встраиваемые комментарии
-    .replaceAll(/( )+/g, ' ') //двойные пробелы
-    .trim(); //лишние пробелы в начале/конце
+export class WordDefinitionFragment {
+
+  /** @type {number} */
+  StartsAt;
+
+  /** @type {number} */
+  EndsAt;
+
+  /**
+   * @param {number} StartIndex 
+   * @param {number} EndIndex 
+   */
+  constructor(StartIndex, EndIndex) {
+    this.StartsAt = StartIndex;
+    this.EndsAt = EndIndex;
+  }
 }

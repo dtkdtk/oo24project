@@ -41,18 +41,16 @@ export function CompleteToLength_Prefix(TargetLength, Str) {
 
 
 /**
- * (форматирование) Обрезать / дополнить пробелами строку до указанной длины.
+ * (форматирование) Обрезать строку до указанной длины.
  * 
- * Пробелы ставятся **после строки**. Если строка обрезается - последним символом ставится троеточие.
+ * Если строка обрезается - последним символом ставится троеточие.
  * @param {number} TargetLength
  * @param {string} Str
  * @returns {string}
  */
 export function ClampToLength(TargetLength, Str) {
   let Buf = Str;
-  if (Str.length < TargetLength)
-    Buf += (" ".repeat(TargetLength - Str.length));
-  else if (Str.length > TargetLength)
+  if (Str.length > TargetLength)
     Buf = Buf.slice(0, TargetLength - 2) + "…";
   return Buf;
 }

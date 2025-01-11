@@ -7,3 +7,5 @@ export declare class IStack<T> {
   pop(): T;
   peek(): T;
 }
+
+export declare const __Any: any;

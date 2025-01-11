@@ -1,5 +1,6 @@
-import { LLL_STATE, _WordStream, _PrepareCodeLine } from "./TheMachine.js";
+import { LLL_STATE, TheReaderStream } from "./TheMachine.js";
 import { RemoveSuffix } from "../Utils.js";
+import * as aux from "./aAux.js";
 
 
 
@@ -12,11 +13,11 @@ import { RemoveSuffix } from "../Utils.js";
  * @param {string} AllCode 
  */
 export function LLL_EXECUTE(AllCode, S = new LLL_STATE()) {
-  AllCode = InterpretPrelude(AllCode, S);
+  const Reader = new TheReaderStream(AllCode);
+  InterpretPrelude(S, Reader);
   if (AllCode.length == 0) return;
 
-  const TheStream = new _WordStream(AllCode);
-  RecursiveInterpret(S, TheStream);
+  RecursiveInterpret(S, Reader);
 }
 
 
@@ -28,66 +29,89 @@ export function LLL_EXECUTE(AllCode, S = new LLL_STATE()) {
  * - метаинформация
  * - ~~прагмы~~
  * - ~~импорты?!~~
+ * 
  * Таблица строк интерпретируется **внутри** Прелюдии.
- * @param {string} AllCode 
  * @param {LLL_STATE} S 
- * @returns {string} изменённый код
+ * @param {TheReaderStream} Reader
  */
-function InterpretPrelude(AllCode, S) {
-  while (AllCode.length > 0) {
-    let [Line, ...OtherLines] = AllCode.split("\n");
-    AllCode = OtherLines.join("\n");
-    Line = _PrepareCodeLine(Line);
-    if (Line.length == 0) continue;
-    
-    const ParsedLine = Line.split(" ");
-    switch (ParsedLine[0]) {
+function InterpretPrelude(S, Reader) {
+  S.CurrentInterpretingWord = "<prelude>";
+  let Instruction;
+  while (Instruction = Reader.GrabUnit(), !Reader.IsCodeEnd) {
+    switch (Instruction) {
       case "META": {
-        S.aux.Assert_At("<prelude>", ParsedLine.length > 2, "Incorrect use of 'META' directive. Expected a field key and value.");
-        let [Key, Value] = ParsedLine.slice(1);
-        Key = RemoveSuffix(Key, ":");
-        S.ScriptMetadata[Key] = ParseValue(S, Value);
+        let PropertyKey = Reader.GrabUnit();
+
+        Reader.Options.HandleInlineComments = false;
+        Reader.Options.HandleCommentLines = false;
+        Reader.Options.UnitBound = "\n";
+        let PropertyValue = Reader.GrabUnit();
+        Reader.Options.HandleInlineComments = true;
+        Reader.Options.HandleCommentLines = true;
+        Reader.Options.UnitBound = " ";
+
+        PropertyKey = RemoveSuffix(PropertyKey, ":");
+        S.ScriptMetadata[PropertyKey] = ParseValue(S, PropertyValue);
         break;
       }
       case "STRINGS-TABLE:": {
-        const NewCode = AllCode.split("\n").slice(1).join("\n");
-        return InterpretStringsTable(NewCode, S);
+        return InterpretStringsTable(S, Reader);
       }
       default:
-        return Line + "\n" + AllCode; //значит, мы уже вышли из прелюдии
+        Reader.RevertGrabbing();
+        return; //значит, мы уже вышли из прелюдии
     }
   }
-  throw new Error("Impossible error");
 }
 
 
 
 /**
  * Отдельный интерпретатор для *таблицы строк*.
- * @param {string} AllCode 
- * @param {LLL_STATE} S 
- * @returns {string} изменённый код
+ * @param {LLL_STATE} S
+ * @param {TheReaderStream} Reader
  */
-function InterpretStringsTable(AllCode, S) {
-  //ВНИМАНИЕ! Символ '\n' пока не работает.
-  //Думаю, подстановку (с учётом терминации) реального перевода строки
-  // вместо этого символа стоит ввести в 'ParseValue()'
+function InterpretStringsTable(S, Reader) {
+  Reader.Options.SkipEmptyUnits = false;
+  Reader.Options.HandleInlineComments = false;
+  Reader.Options.HandleCommentLines = false;
+  Reader.Options.UnitBound = "\n";
+  let Line;
+  interpreting: while (Line = Reader.GrabUnit(), !Reader.IsCodeEnd) {
+    let Content = "";
 
-  while (AllCode.length > 0) {
-    let [Line, ...OtherLines] = AllCode.split("\n\n");
-    AllCode = OtherLines.join("\n\n");
-    
-    const [TheInstruction] = Line.split(" ", 1);
-    if (TheInstruction == "STRING") {
-      const TheString = Line.split(" ").slice(1).join(" ");
-      S.StringsTable.push(TheString);
+    if (Line == "STRING") {
+      readingString: while (!Reader.IsCodeEnd) {
+        const Line = Reader.GrabUnit();
+        if (Line == "END") {
+          Content = HandleCharacterEscaping(S, Content);
+          S.StringsTable.push(Content);
+          continue interpreting;
+        }
+        if (Line == "\\END") {
+          if (Content.length > 0)
+            Content += "\n"
+          Content += "END";
+          continue readingString;
+        }
+        if (Content.length > 0)
+          Content += "\n"
+        Content += Line;
+      }
+      return aux.ThrowRuntimeExc_Here(S, `Expected "END" at end of string.`);
     }
-    else if (TheInstruction.startsWith("END"))
-      return AllCode;
+    else if (Line == "END-TABLE") {
+      Reader.Options.HandleCommentLines = true;
+      Reader.Options.HandleInlineComments = true;
+      Reader.Options.DrainOnNewline = true;
+      Reader.Options.UnitBound = " ";
+      Reader.Options.SkipEmptyUnits = true;
+      return;
+    }
     else
-      throw new LLL_InterpreterError("Нарушение формата таблицы строк: Двойные переводы строк имеют специальное значение (служат разделителем для строк в таблице).\n\tЕсли хотите вставить двойной перевод строки - используйте строку с '\\n'.");
+      return aux.ThrowRuntimeExc_Here(S, `Failed to process line from string table block:`);
   }
-  throw new LLL_InterpreterError(`Незавершённый блок таблицы строк`);
+  return aux.ThrowRuntimeExc_Here(S, `Expected "END-TABLE" at end of string table block.`);
 }
 
 
@@ -95,11 +119,11 @@ function InterpretStringsTable(AllCode, S) {
 /**
  * Рекурсивный интерпретатор **И ИСПОЛНИТЕЛЬ** основной части кода.
  * @param {LLL_STATE} S 
- * @param {_WordStream} ws 
+ * @param {TheReaderStream} Reader 
  */
-function RecursiveInterpret(S, ws) {
-  interpreting: while (ws.tkRefillLineBuff()) {
-    const Tk = ws.tkGrab();
+function RecursiveInterpret(S, Reader) {
+  let Tk;
+  interpreting: while (Tk = Reader.GrabUnit(), !Reader.IsCodeEnd) {
     S.CurrentInterpretingWord = Tk;
     findingDefinition: for (let i = S.Closures.length - 1; i >= 0; i--) {
       const TheClosure = S.Closures[i];
@@ -115,18 +139,76 @@ function RecursiveInterpret(S, ws) {
           continue interpreting;
 
         case "function": //нашли, нативный JS
-          Definition(S, ws);
+          Definition(S, Reader);
           continue interpreting;
 
-        case "object": //отложенное вычисление?..
-          if (Definition instanceof _WordStream) {
+        /*case "object": //отложенное вычисление?..
+          if (Definition instanceof TheReaderStream) {
             RecursiveInterpret(S, Definition);
           }
-          else continue findingDefinition;
+          else continue findingDefinition;*/
+        default:
+          aux.ThrowRuntimeExc_Here(S, `Unsupported JavaScript-runtime datatype: '${typeof Tk}'`);
       }
     }
     S.Stack.push(ParseValue(S, Tk)); //не нашли ни в одном замыкании => кидаем в стек "как есть"
   }
+}
+
+
+
+/**
+ * Обрабатывает экранирвоание символов (а также спец.символы вроде '\n').
+ * 
+ * В данный момент поддерживаются следующие спец.символы:
+ * - `\r` (возврат каретки; для совместимости с форматом конца строки "CRLF")
+ * - `\n` (переход на новую строку)
+ * - `\t` (символ табуляции)
+ * - `\\` (обратный слеш)
+ * - `\<перевод_строки>` (отменяет перевод строки)
+ * @param {LLL_STATE} S 
+ * @param {string} AllCode 
+ * @returns {string} обработанная строка
+ * @since `v0.0.3`
+ */
+function HandleCharacterEscaping(S, AllCode) {
+  let NewCode = "";
+  let PreviousIndex = 0;
+  theLoop: while (true) {
+    const MatchIndex = AllCode.indexOf("\\", PreviousIndex + 2);
+    if (MatchIndex == -1) break;
+    if (MatchIndex + 1 == AllCode.length)
+      return aux.ThrowRuntimeExc_Here(S, `Expected escape character, got end of string`);
+    NewCode += AllCode.slice(PreviousIndex, MatchIndex);
+    PreviousIndex = MatchIndex;
+    switch (AllCode[MatchIndex + 1]) {
+      case "r":
+        NewCode += "\r";
+        continue theLoop;
+      case "n":
+        NewCode += "\n";
+        continue theLoop;
+      case "t":
+        NewCode += "\t";
+        continue theLoop;
+      case "0":
+        NewCode += "\0";
+        continue theLoop;
+      case "\\":
+        NewCode += "\\";
+        continue theLoop;
+      case "\n":
+        continue theLoop;
+      case "\r":
+        if (AllCode[MatchIndex + 2] == "\n")
+        AllCode = AllCode.slice(MatchIndex + 3);
+        continue theLoop;
+      default:
+        return aux.ThrowRuntimeExc_Here(S, `Non-existent special character: '\\${AllCode[MatchIndex + 1]}'`);
+    }
+  }
+  NewCode += AllCode.slice(PreviousIndex, AllCode.length);
+  return NewCode;
 }
 
 
@@ -140,11 +222,7 @@ function RecursiveInterpret(S, ws) {
 function ParseValue(S, Value) {
   const AsNumber = Number(Value);
   if (!isNaN(AsNumber))
-    return S.aux.RtvalueOf_Number(AsNumber);
+    return aux.RtvalueOf_Number(S, AsNumber);
   else //однозначно строка; других значений у нас пока нет
-    return S.aux.RtvalueOf_String(Value);
+    return aux.RtvalueOf_String(S, Value);
 }
-
-
-
-class LLL_InterpreterError extends Error {};

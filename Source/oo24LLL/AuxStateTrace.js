@@ -1,18 +1,14 @@
 import * as LibUtils from "../Utils.js";
-const TARGET_TERMINAL_WIDTH = 100;
+import { MaybeReprAs_Number, ReprAs_String } from "./AuxReprConversions.js";
+const TARGET_TERMINAL_WIDTH = 60;
 
 /**
- * @typedef {import("./TheMachine.js").LLL_STATE} LLL_STATE
- */
-
-/**
- * @private
- * Функция для красивой трассировки состояния интерпретатора.
- * 
+ * Возвращает `LLL_STATE`, готовую к красивому выводу в консоль.
  * @param {LLL_STATE} S
- * @returns {string} 
+ * @returns {string}
+ * @see {@link _AuxGetStateStace() source}
  */
-export function _AuxGetStateStace(S) {
+export function GetStateTrace(S) {
   let Buf = "Current interpreter's state:\n";
   ;_ScriptMetadataFormatting: {
     Buf += "> ScriptMetadata:\n"
@@ -24,7 +20,7 @@ export function _AuxGetStateStace(S) {
 
     const MaxIndex = Entries.length - 1;
     const IndexLength = MaxIndex.toString().length;
-    const MaxKeyLength = [...Entries].sort(( [keyA],[keyB] ) => keyB.length - keyA.length)[0].length;
+    const MaxKeyLength = [...Entries].sort(( [keyA],[keyB] ) => keyB.length - keyA.length)[0][0].length;
 
     for (let i = 0; i < Entries.length; i++) {
       const [Key, Value] = Entries[i];
@@ -33,7 +29,7 @@ export function _AuxGetStateStace(S) {
       Buf += "| ";
       Buf += LibUtils.CompleteToLength_Prefix(MaxKeyLength, Key);
       Buf += " | ";
-      Buf += LibUtils.ClampToLength(TARGET_TERMINAL_WIDTH - MaxKeyLength, Value);
+      Buf += LibUtils.ClampToLength(TARGET_TERMINAL_WIDTH - MaxKeyLength, ReprAs_String(S, Value));
       Buf += "\n";
     }
   };
@@ -70,13 +66,13 @@ export function _AuxGetStateStace(S) {
     const MaxIndex = S.Stack.length - 1;
     const IndexLength = LibUtils.ClampNumber.OnlyMin(3, MaxIndex.toString().length);
     Buf += "\tTOP| ";
-    Buf += LibUtils.ClampToLength(TARGET_TERMINAL_WIDTH, S.Stack.peek());
+    Buf += LibUtils.ClampToLength(TARGET_TERMINAL_WIDTH, _Represent(S, S.Stack.peek()).toString());
     Buf += "\n";
     for (let i = S.Stack.length - 2; i >= 0; i--) {
       Buf += "\t";
-      Buf += LibUtils.CompleteToLength_Prefix(IndexLength, i.toString());
+      Buf += LibUtils.CompleteToLength_Prefix(IndexLength, (i - MaxIndex).toString());
       Buf += "| ";
-      Buf += LibUtils.ClampToLength(TARGET_TERMINAL_WIDTH, S.Stack[i]);
+      Buf += LibUtils.ClampToLength(TARGET_TERMINAL_WIDTH, _Represent(S, S.Stack[i]).toString());
       Buf += "\n";
     }
   };
@@ -116,4 +112,16 @@ export function _AuxGetStateStace(S) {
     }
   };
   return Buf;
+}
+
+
+
+/**
+ * @param {LLL_STATE} S 
+ * @param {llval_ty} Rtvalue 
+ * @returns {llrepr_ANY_ty}
+ */
+function _Represent(S, Rtvalue) {
+  return MaybeReprAs_Number(S, Rtvalue)
+    ?? ReprAs_String(S, Rtvalue);
 }

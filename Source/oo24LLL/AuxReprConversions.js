@@ -1,84 +1,114 @@
-import { IsInteger } from "../Utils.js";
+import * as aux from "./aAux.js";
 
 /**
+ * Конвертирует указанное представление в runtime-значение.
+ * 
+ * *Представление* -> __*Значение*__
+ * @param {LLL_STATE} S
  * @param {llrepr_ANY_ty} Repr
  * @returns {llval_ty}
  */
-export function RtvalueOf(Repr) {
-  if (typeof Repr == "number")
-    return RtvalueOf_Number(Repr);
-  else if (typeof Repr == "string")
-    return RtvalueOf_String(Repr);
-  else
-    throw new TypeError(`Unknown representation.\n\tSupported: 'number', 'string'\n\tGot: '${typeof Repr}'`);
+export function RtvalueOf(S, Repr) {
+  return Repr; //забавно, не так ли?
+  //заглушка под натив.
 }
 
 /**
- * @param {number} NumRepr 
+ * Специализация {@link RtvalueOf()} для чисел (тип `Integer|Float`).
+ * 
+ * *Представление* -> __*Значение*__
+ * @param {LLL_STATE} S
+ * @param {llrepr_number_ty} NumRepr 
  * @returns {llval_ty}
  */
-export function RtvalueOf_Number(NumRepr) {
-  if (IsInteger(NumRepr)) {
-    const View = new BigInt64Array(1);
-    View[0] = BigInt(NumRepr);
-    return View.buffer;
-  }
-  else { //=> float
-    const View = new Float64Array(1);
-    View[0] = NumRepr;
-    return View.buffer;
-  }
+export function RtvalueOf_Number(S, NumRepr) {
+  return NumRepr;
+  //заглушка под натив.
 }
+
 /**
- * @param {string} StrRepr 
+ * Специализация {@link RtvalueOf()} для строк (тип `String`).
+ * 
+ * *Представление* -> __*Значение*__
+ * @param {LLL_STATE} S
+ * @param {llrepr_string_ty} StrRepr 
  * @returns {llval_ty}
  */
-export function RtvalueOf_String(StrRepr) {
-  const Encoder = new TextEncoder();
-  //@ts-ignore ((возвращает ИСХОДНЫЙ буфер, а мы положили ровно то, что нам надо))
-  return Encoder.encode(StrRepr).buffer;
+export function RtvalueOf_String(S, StrRepr) {
+  return StrRepr;
+  //заглушка под натив.
+}
+
+/**
+ * ПЫТАЕТСЯ конвертировать runtime-значение в число (тип `Integer|Float`).
+ * Если не получается - возвращает `null` вместо ошибки.
+ * 
+ * *Значение* -> __*Представление*__
+ * @param {LLL_STATE} S 
+ * @param {llval_ty} Rtvalue 
+ * @returns {llrepr_number_ty | null}
+ */
+export function MaybeReprAs_Number(S, Rtvalue) {
+  if (typeof Rtvalue == "number")
+    return Rtvalue;
+
+  const AsNumber = Number(Rtvalue);
+  if (isNaN(AsNumber))
+    return null;
+  return AsNumber;
 }
 
 
 
 /**
+ * Конвертирует runtime-значение в число (тип `Integer|Float`).
+ * 
+ * *Значение* -> __*Представление*__
+ * @param {LLL_STATE} S
  * @param {llval_ty} Rtvalue
- * @returns {number | never}
- * @this {LLL_STATE}
+ * @returns {llrepr_number_ty | never}
  */
-export function ReprAs_Integer(Rtvalue) {
-  const View = new BigInt64Array(Rtvalue);
-  if (View.length > 1)
-    return this.aux.ThrowRuntimeExc_At(this.CurrentInterpretingWord, `Expected Integer number, received '0x${Buffer.from(Rtvalue).toString("hex")}'.`);
-
-  const Num = Number(View[0]);
-  if (isNaN(Num))
-    return this.aux.ThrowRuntimeExc_At(this.CurrentInterpretingWord, `The given value cannot be converted to Integer.`);
-  if (!IsInteger(Num))
-    return this.aux.ThrowRuntimeExc_At(this.CurrentInterpretingWord, `Expected Integer number, received Float number.`);
-  return Num;
+export function ReprAs_Number(S, Rtvalue) {
+  const AsNumber = MaybeReprAs_Number(S, Rtvalue);
+  if (AsNumber === null)
+    return aux.ThrowRuntimeExc_Here(S, `The given value cannot be converted to Integer.`);;
+  return AsNumber;
 }
-/**
- * @param {llval_ty} Rtvalue
- * @returns {number | never}
- * @this {LLL_STATE}
- */
-export function ReprAs_Float(Rtvalue) {
-  const View = new Float64Array(Rtvalue);
-  if (View.length > 1)
-    return this.aux.ThrowRuntimeExc_At(this.CurrentInterpretingWord, `Expected Float number, received '0x${Buffer.from(Rtvalue).toString("hex")}'.`);
 
-  const Num = Number(View[0]);
-  if (isNaN(Num))
-    return this.aux.ThrowRuntimeExc_At(this.CurrentInterpretingWord, `The given value cannot be converted to Float.`);
-  return Num;
-}
 /**
+ * Конвертирует runtime-значение в UTF-8 строку (тип `String`).
+ * 
+ * *Значение* -> __*Представление*__
+ * @param {LLL_STATE} S
  * @param {llval_ty} Rtvalue
- * @returns {string | never}
- * @this {LLL_STATE}
+ * @returns {llrepr_string_ty}
  */
-export function ReprAs_String(Rtvalue) {
-  const Decoder = new TextDecoder("utf8");
-  return Decoder.decode(Rtvalue);
+export function ReprAs_String(S, Rtvalue) {
+  return String(Rtvalue);
+}
+
+
+
+/**
+ * Специализированный `IStack#pop()`, который автоматически преобразует
+ * *значение* в *представление* типа `Integer|Float`.
+ * 
+ * Проверка длины стека - на вашей совести!
+ * @param {LLL_STATE} S
+ * @returns {llrepr_number_ty}
+ */
+export function Pop_Number(S) {
+  return ReprAs_Number(S, S.Stack.pop());
+}
+
+/**
+ * Специализированный `IStack#pop()`, который автоматически преобразует
+ * *значение* в *представление* типа String.
+ * 
+ * Проверка длины стека - на вашей совести!
+ * @param {LLL_STATE} S
+ * @returns {llrepr_string_ty}
+ */
+export function Pop_String(S) {
+  return ReprAs_String(S, S.Stack.pop());
 }

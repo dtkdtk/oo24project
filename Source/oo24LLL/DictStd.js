@@ -1,3 +1,5 @@
+import * as aux from "./aAux.js";
+
 /**
  * @internal
  * Словарь стандартных (встроенных) функций.
@@ -13,8 +15,20 @@ export default new Map(Object.entries({
    * @signature `[value] dup`
    */
   dup: (S, ws) => {
-    S.aux.AssertStackLength(1);
+    aux.AssertStackLength(S, 1);
     S.Stack.push(S.Stack.peek());
+  },
+
+  /**
+   * Дублирует СУБ-верхушку стека.
+   * @signature `[value] [(top)] dupsub`
+   */
+  dupsub: (S, ws) => {
+    aux.AssertStackLength(S, 2);
+    const Top = S.Stack.pop();
+    const Subtop = S.Stack.peek();
+    S.Stack.push(Top);
+    S.Stack.push(Subtop);
   },
 
   /**
@@ -22,21 +36,37 @@ export default new Map(Object.entries({
    * @signature `[value] drop`
    */
   drop: (S, ws) => {
-    S.aux.AssertStackLength(1);
+    aux.AssertStackLength(S, 1);
     S.Stack.pop();
   },
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
   /**
+   * Получает из таблицы строк строку с указанным индексом (`strindex`)
+   * и возвращает её.
+   * @signature `[strindex] string`
+   */
+  string: (S, ws) => {
+    aux.AssertStackLength(S, 1);
+    const StrIndex = aux.Pop_Number(S);
+    aux.Assert_Here(S, StrIndex >= 0 && StrIndex < S.StringsTable.length, `String with index '${StrIndex}' not found.`);
+
+    const StringFromTable = S.StringsTable[StrIndex];
+    aux.Assert_Here(S, StringFromTable !== undefined, `String not found.`);
+
+    S.Stack.push(aux.RtvalueOf_String(S, StringFromTable));
+  },
+
+  /**
    * Конкатенирует пред-вершину стека с вершиной.
    * @signature `[dest] [source] concat`
    */
   concat: (S, ws) => {
-    S.aux.AssertStackLength(2);
-    const Source = S.aux.PopValue_String();
-    const Dest = S.aux.PopValue_String();
-    S.Stack.push(S.aux.RtvalueOf( Source.concat(Dest) ));
+    aux.AssertStackLength(S, 2);
+    const Source = aux.Pop_String(S);
+    const Dest = aux.Pop_String(S);
+    S.Stack.push(aux.RtvalueOf(S, Source.concat(Dest)));
   },
 
   /**
@@ -44,8 +74,8 @@ export default new Map(Object.entries({
    * @signature `[value] print`
    */
   print: (S, ws) => {
-    S.aux.AssertStackLength(1);
-    console.log( S.Stack.pop() );
+    aux.AssertStackLength(S, 1);
+    S.StdOUT.write(aux.Pop_String(S));
   },
   
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -56,34 +86,34 @@ export default new Map(Object.entries({
    */
 
   sum: (S, ws) => {
-    S.aux.AssertStackLength(2);
-    const From = S.aux.PopValue_Integer();
-    const To = S.aux.PopValue_Integer();
-    S.Stack.push(S.aux.RtvalueOf( From + To ));
+    aux.AssertStackLength(S, 2);
+    const From = aux.Pop_Number(S);
+    const To = aux.Pop_Number(S);
+    S.Stack.push(aux.RtvalueOf(S, From + To));
   },
   sub: (S, ws) => {
-    S.aux.AssertStackLength(2);
-    const From = S.aux.PopValue_Integer();
-    const To = S.aux.PopValue_Integer();
-    S.Stack.push(S.aux.RtvalueOf( From - To ));
+    aux.AssertStackLength(S, 2);
+    const From = aux.Pop_Number(S);
+    const To = aux.Pop_Number(S);
+    S.Stack.push(aux.RtvalueOf(S, From - To));
   },
   mul: (S, ws) => {
-    S.aux.AssertStackLength(2);
-    const From = S.aux.PopValue_Integer();
-    const To = S.aux.PopValue_Integer();
-    S.Stack.push(S.aux.RtvalueOf( From * To ));
+    aux.AssertStackLength(S, 2);
+    const From = aux.Pop_Number(S);
+    const To = aux.Pop_Number(S);
+    S.Stack.push(aux.RtvalueOf(S, From * To));
   },
   div: (S, ws) => {
-    S.aux.AssertStackLength(2);
-    const From = S.aux.PopValue_Integer();
-    const To = S.aux.PopValue_Integer();
-    S.Stack.push(S.aux.RtvalueOf( ~~(From / To) ));
+    aux.AssertStackLength(S, 2);
+    const From = aux.Pop_Number(S);
+    const To = aux.Pop_Number(S);
+    S.Stack.push(aux.RtvalueOf(S, ~~(From / To) ));
   },
   mod: (S, ws) => {
-    S.aux.AssertStackLength(2);
-    const From = S.aux.PopValue_Integer();
-    const To = S.aux.PopValue_Integer();
-    S.Stack.push(S.aux.RtvalueOf( From % To ));
+    aux.AssertStackLength(S, 2);
+    const From = aux.Pop_Number(S);
+    const To = aux.Pop_Number(S);
+    S.Stack.push(aux.RtvalueOf(S, From % To));
   },
 
 }));
