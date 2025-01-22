@@ -1,8 +1,9 @@
 import "./Types.js";
 import * as libUtilsTy from "../Utils-typed.js";
+import * as __Aux from "./aAux.js";
 import DictStd from "./DictStd.js";
 import DictSyntax from "./DictSyntax.js";
-import * as __Aux from "./aAux.js";
+import { TK_INLINE_COMMENT_START, TK_INLINE_COMMENT_END, TK_COMMENT_LINE_START } from "./CommonGrammar.js";
 
 
 
@@ -37,20 +38,26 @@ export class LLL_STATE {
 
   /**
    * Стек *замыканий*: областей видимости слов(функций) и переменных.
-   * @type {libUtilsTy.IStack<Map<string, llval_ty | NativeJsFunction | TheReaderStream>>}
+   * @type {libUtilsTy.IStack<libUtilsTy.Labelled<Map<string, lldefinition_u>>>}
    * @readonly
    */
   Closures = new libUtilsTy.IStack( //Замыкания по умолчанию:
     DictSyntax,
     DictStd,
-    new Map(),
+    libUtilsTy.Labelled("<global>", new Map()),
   );
+
+  ScriptFileName = "???";
 
   /**
    * Интерпретируемое в данный момент слово.
-   * @type {string}
    */
-  CurrentInterpretingWord = ""; //Ответственность закреплена за 'RecursiveInterpret'
+  CurrentInterpretingWord = ""; //Ответственность - за функциями интерпретации
+
+  /**
+   * Интерпретируемая в данный момент строка (её номер).
+   */
+  CurrentInterpretingLineIndex = 0; //Ответственность - за функциями интерпретации
 
   /**
    * Текущий поток ввода (`stdin`)
@@ -69,15 +76,6 @@ export class LLL_STATE {
 }
 
 
-
-/** Начало строчного комментария */
-const TK_COMMENT_LINE_START = ";";
-
-/** Начало встраиваемого комментария */
-const TK_INLINE_COMMENT_START = "(";
-
-/** Конец встраиваемого комментария */
-const TK_INLINE_COMMENT_END = ")";
 
 /**
  * Используется в функциях обработки токенов
@@ -100,39 +98,18 @@ export class TheReaderStream {
 
   Pos = 0;
 
-  /**
-   * Осуществляет "переход" к интерпретации определения (некого фрагмента кода)
-   * @param {WordDefinitionFragment} Definition
-   */
-  GotoDefinition(Definition) {
-    this.#Bounds.push(Definition);
-    this.Pos = Definition.StartsAt;
-  }
-
-  /**
-   * Антоним {@link GotoDefinition()} - осуществляет ОБРАТНЫЙ переход,
-   * "выход" из интерпретации определения.
-   */
-  ExitDefinition() {
-    this.#Bounds.pop();
-    this.IsFragmentEnd = true;
-    if (this.#Bounds.length == 0)
-      this.IsCodeEnd = true;
-  }
-
   #LineIndex = 0;
   get LineIndex() {
     return this.#LineIndex;
   }
-
-  /** Позиция перед извлечением единицы кода. @type {number} */
-  #PreviousPosition = 0;
 
   /** @type {string} */
   #Buf = "";
 
   /** @type {string} */
   #AllCode;
+
+  get __AllCode() { return this.#AllCode; }
 
   /** Внутреннее состояние интерпретатора. */
   #InternalState = {
@@ -149,7 +126,7 @@ export class TheReaderStream {
   /** Мы достигли конца ФРАГМЕНТА кода? (текущего интерпретируемого определения) */
   IsFragmentEnd = false;
 
-  /** Дополнительные опции чтения/интерпретации. Регулируются извне. */
+  /** Дополнительные опции чтения/интерпретации. Регулируются извне. @readonly */
   Options = {
     /** Обрабатывать встраиваемые комментарии? */
     HandleInlineComments: true,
@@ -182,14 +159,18 @@ export class TheReaderStream {
   /**
    * *Извлекает из потока кода* текущую единицу кода (слово, строку и т.д.)
    * 
-   * Проверка конца кода на вашей совести!
+   * Проверка конца кода ({@link IsCodeEnd}) на вашей совести!
    * @returns {string}
    */
   GrabUnit() {
     this.IsFragmentEnd = false;
-    this.#PreviousPosition = this.Pos;
 
-    while (this.Pos < this.#Bounds.peek().EndsAt) {
+    if (this.Pos - 1 == this.#Bounds.peek().EndsAt) {
+      this.ExitDefinition();
+      return this.#DrainBuffer();
+    }
+
+    while (!this.IsCodeEnd) {
       const Tk = this.#AllCode[this.Pos];
       this.Pos++;
 
@@ -197,21 +178,77 @@ export class TheReaderStream {
         || this.#MaybeHandle_CommentLine(Tk)
         || this.#MaybeHandle_InlineComment(Tk)
         || this.#MaybeHandle_InterpretingUnitBound(Tk);
+      if (CurrentStatus == 0)
+        this.#Buf += Tk;
+      
+      if (this.Pos - 1 == this.#Bounds.peek().EndsAt) {
+        this.ExitDefinition();
+        return this.#DrainBuffer();
+      }
+
       if (CurrentStatus == 1) continue;
       else if (CurrentStatus == 2) return this.#DrainBuffer();
+    }
+    
+    return libUtilsTy.__Any;
+  }
 
-      this.#Buf += Tk;
+
+  /**
+   * *Просматривает, не извлекая* текущую единицу кода (слово, строку и т.д.)
+   * 
+   * (Не модифицирует "глобальное" состояние Читателя)
+   * 
+   * Проверка конца кода ({@link IsCodeEnd}) на вашей совести!
+   * @returns {string}
+   */
+  PeekUnit() {
+    if (this.Pos - 1 == this.#Bounds.peek().EndsAt) {
+      return this.#DrainBuffer();
     }
 
-    this.ExitDefinition();
+    let _LocalPos = this.Pos;
+    while (!this.IsCodeEnd) {
+      const Tk = this.#AllCode[_LocalPos];
+      _LocalPos++;
+
+      let CurrentStatus = this.#MaybeHandle_Newline(Tk)
+        || this.#MaybeHandle_CommentLine(Tk)
+        || this.#MaybeHandle_InlineComment(Tk)
+        || this.#MaybeHandle_InterpretingUnitBound(Tk);
+      if (CurrentStatus == 0)
+        this.#Buf += Tk;
+      
+      if (_LocalPos - 1 == this.#Bounds.peek().EndsAt) {
+        return this.#DrainBuffer();
+      }
+
+      if (CurrentStatus == 1) continue;
+      else if (CurrentStatus == 2) return this.#DrainBuffer();
+    }
+    
     return libUtilsTy.__Any;
   }
 
   /**
-   * Отменяет предыдущее извлечение из потока.
+   * Осуществляет "переход" к интерпретации определения (некого фрагмента кода)
+   * @param {WordDefinitionFragment} Definition
    */
-  RevertGrabbing() {
-   this.Pos = this.#PreviousPosition;
+  GotoDefinition(Definition) {
+    this.#Bounds.push(Definition);
+    this.Pos = Definition.StartsAt;
+  }
+
+  /**
+   * Антоним {@link GotoDefinition()} - осуществляет ОБРАТНЫЙ переход,
+   * "выход" из интерпретации определения.
+   */
+  ExitDefinition() {
+    this.#Bounds.pop();
+    this.IsFragmentEnd = true;
+    if (this.#Bounds.length == 0) {
+      this.IsCodeEnd = true;
+    }
   }
 
   /**
@@ -222,6 +259,12 @@ export class TheReaderStream {
     this.#Buf = "";
     return Word;
   }
+
+  /* Обратите внимание: методы '#MaybeHandle_*' не должны мутировать
+  "глобальное" состояние Читателя (поля '#Bounds', 'Pos', '#AllCode').
+  Исключение - внутреннее состояние ('#InternalState') и '#LineIndex' (в методе '#MaybeHandle_Newline').
+  Кроме этого, данные функции не должны читать код самостоятельно (могут получать лишь один прочитанный символ,
+  + иметь доступ к буферу '#Buf') или мутировать "глобальное" состояние Читателя. */
 
   /**
    * Часть {@link GrabUnit()}, отвечающая за обработку переходов на новую строку.

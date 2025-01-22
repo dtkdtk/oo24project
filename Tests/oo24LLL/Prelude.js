@@ -15,13 +15,14 @@ libTest.describe("Prelude testing", () => {
 META Owner: dtkdtk0
 META Version v1.0.67
 
-STRINGS-TABLE:
+STRINGS_TABLE...
 
 STRING
 Hello, World!
 END
 
-END-TABLE
+...END_TABLE
+...END_PRELUDE
 
 0 string print
     `, S);

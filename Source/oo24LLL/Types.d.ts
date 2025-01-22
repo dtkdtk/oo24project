@@ -1,5 +1,6 @@
 declare type LLL_STATE = import("./TheMachine.js").LLL_STATE;
 declare type TheReaderStream = import("./TheMachine.js").TheReaderStream;
+declare type WordDefinitionFragment = import("./TheMachine.js").WordDefinitionFragment;
 
 declare type NativeJsFunction = (S: LLL_STATE, ws: TheReaderStream) => unknown;
 declare type IntSize = 1 | 2 | 4 | 8;
@@ -19,4 +20,4 @@ declare type llrepr_number_ty = number;
 declare type llrepr_string_ty = string;
 declare type llrepr_ANY_ty = llrepr_number_ty | llrepr_string_ty;
 
-declare type lldefinition_u = llval_ty | NativeJsFunction | TheReaderStream;
+declare type lldefinition_u = llval_ty | NativeJsFunction | WordDefinitionFragment;

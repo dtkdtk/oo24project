@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "oo24project",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "[TOY] Assembler-like language written in JavaScript",
   "main": "Source/oo24-cli.js",
   "scripts": {

@@ -1,6 +1,7 @@
 import { LLL_STATE, TheReaderStream } from "./TheMachine.js";
 import { RemoveSuffix } from "../Utils.js";
 import * as aux from "./aAux.js";
+import * as CoGr from "./CommonGrammar.js";
 
 
 
@@ -17,7 +18,7 @@ export function LLL_EXECUTE(AllCode, S = new LLL_STATE()) {
   InterpretPrelude(S, Reader);
   if (AllCode.length == 0) return;
 
-  RecursiveInterpret(S, Reader);
+  InterpretMainCode(S, Reader);
 }
 
 
@@ -36,10 +37,13 @@ export function LLL_EXECUTE(AllCode, S = new LLL_STATE()) {
  */
 function InterpretPrelude(S, Reader) {
   S.CurrentInterpretingWord = "<prelude>";
-  let Instruction;
-  while (Instruction = Reader.GrabUnit(), !Reader.IsCodeEnd) {
+  let ExplicitPreludeScope = false; //явное указание начала и конца Прелюдии?
+  while (!Reader.IsCodeEnd) {
+    const Instruction = Reader.PeekUnit();
+    S.CurrentInterpretingLineIndex = Reader.LineIndex;
     switch (Instruction) {
-      case "META": {
+      case CoGr.Prelude.META: {
+        Reader.GrabUnit(); //Двигаем поток вперёд, ибо 'Instruction' не извлечена из потока
         let PropertyKey = Reader.GrabUnit();
 
         Reader.Options.HandleInlineComments = false;
@@ -54,12 +58,24 @@ function InterpretPrelude(S, Reader) {
         S.ScriptMetadata[PropertyKey] = ParseValue(S, PropertyValue);
         break;
       }
-      case "STRINGS-TABLE:": {
-        return InterpretStringsTable(S, Reader);
+      case CoGr.Prelude.STRTABLE_START: {
+        Reader.GrabUnit(); //Двигаем поток вперёд, ибо 'Instruction' не извлечена из потока
+        InterpretStringsTable(S, Reader);
+        break;
       }
-      default:
-        Reader.RevertGrabbing();
-        return; //значит, мы уже вышли из прелюдии
+      case CoGr.Prelude.EXPLICIT_START_PRELUDE:
+        Reader.GrabUnit(); //Двигаем поток вперёд, ибо 'Instruction' не извлечена из потока
+        ExplicitPreludeScope = true;
+        break;
+      case CoGr.Prelude.EXPLICIT_END_PRELUDE:
+        Reader.GrabUnit(); //Двигаем поток вперёд, ибо 'Instruction' не извлечена из потока
+        if (!ExplicitPreludeScope)
+          return aux.ThrowRuntimeExc_Here(S, `If there is an explicit end of the Prelude, there must also be an explicit beginning.`);
+        return;
+      default: //не спец.инструкция Прелюдии => мы вышли из неё
+        if (ExplicitPreludeScope)
+          return aux.ThrowRuntimeExc_Here(S, `Expected an explicit end of the Prelude (because the beginning is explicitly specified).`);
+        return;
     }
   }
 }
@@ -72,15 +88,17 @@ function InterpretPrelude(S, Reader) {
  * @param {TheReaderStream} Reader
  */
 function InterpretStringsTable(S, Reader) {
-  Reader.Options.SkipEmptyUnits = false;
-  Reader.Options.HandleInlineComments = false;
-  Reader.Options.HandleCommentLines = false;
+  S.CurrentInterpretingWord = "<prelude/StringsTable>";
   Reader.Options.UnitBound = "\n";
-  let Line;
-  interpreting: while (Line = Reader.GrabUnit(), !Reader.IsCodeEnd) {
+  Reader.Options.SkipEmptyUnits = false;
+  interpreting: while (!Reader.IsCodeEnd) {
+    let Line = Reader.GrabUnit();
+    S.CurrentInterpretingLineIndex = Reader.LineIndex;
     let Content = "";
 
-    if (Line == "STRING") {
+    if (Line == CoGr.Prelude.STRTABLE_ELEMENT_START) {
+      Reader.Options.HandleInlineComments = false;
+      Reader.Options.HandleCommentLines = false;
       readingString: while (!Reader.IsCodeEnd) {
         const Line = Reader.GrabUnit();
         if (Line == "END") {
@@ -98,9 +116,9 @@ function InterpretStringsTable(S, Reader) {
           Content += "\n"
         Content += Line;
       }
-      return aux.ThrowRuntimeExc_Here(S, `Expected "END" at end of string.`);
+      return aux.ThrowRuntimeExc_Here(S, `Expected '${CoGr.Prelude.STRTABLE_ELEMENT_END}' at end of string.`);
     }
-    else if (Line == "END-TABLE") {
+    else if (Line == CoGr.Prelude.STRTABLE_END) {
       Reader.Options.HandleCommentLines = true;
       Reader.Options.HandleInlineComments = true;
       Reader.Options.DrainOnNewline = true;
@@ -109,22 +127,28 @@ function InterpretStringsTable(S, Reader) {
       return;
     }
     else
-      return aux.ThrowRuntimeExc_Here(S, `Failed to process line from string table block:`);
+      return aux.ThrowRuntimeExc_Here(S, `Failed to process this line from string table block: '${Line}'`);
   }
-  return aux.ThrowRuntimeExc_Here(S, `Expected "END-TABLE" at end of string table block.`);
+  return aux.ThrowRuntimeExc_Here(S, `Expected '${CoGr.Prelude.STRTABLE_END}' at end of string table block.`);
 }
 
 
 
 /**
- * Рекурсивный интерпретатор **И ИСПОЛНИТЕЛЬ** основной части кода.
+ * Интерпретатор **И ИСПОЛНИТЕЛЬ** основной части кода.
  * @param {LLL_STATE} S 
  * @param {TheReaderStream} Reader 
  */
-function RecursiveInterpret(S, Reader) {
-  let Tk;
-  interpreting: while (Tk = Reader.GrabUnit(), !Reader.IsCodeEnd) {
+function InterpretMainCode(S, Reader) {
+  interpreting: while (!Reader.IsCodeEnd) {
+    const Tk = Reader.GrabUnit();
     S.CurrentInterpretingWord = Tk;
+    S.CurrentInterpretingLineIndex = Reader.LineIndex;
+    const MaybeAsNumber = aux.MaybeReprAs_Number(S, Tk);
+    if (MaybeAsNumber !== null) {
+      S.Stack.push(MaybeAsNumber);
+      continue interpreting;
+    }
     findingDefinition: for (let i = S.Closures.length - 1; i >= 0; i--) {
       const TheClosure = S.Closures[i];
       const Definition = TheClosure.get(Tk);
@@ -142,16 +166,12 @@ function RecursiveInterpret(S, Reader) {
           Definition(S, Reader);
           continue interpreting;
 
-        /*case "object": //отложенное вычисление?..
-          if (Definition instanceof TheReaderStream) {
-            RecursiveInterpret(S, Definition);
-          }
-          else continue findingDefinition;*/
         default:
-          aux.ThrowRuntimeExc_Here(S, `Unsupported JavaScript-runtime datatype: '${typeof Tk}'`);
+          aux.ThrowRuntimeExc_Here(S, `[internal] Unsupported JavaScript-runtime datatype: '${typeof Tk}'`);
       }
     }
-    S.Stack.push(ParseValue(S, Tk)); //не нашли ни в одном замыкании => кидаем в стек "как есть"
+    //не нашли определение ни в одном замыкании
+    return aux.ThrowRuntimeExc_Here(S, `Undefined word: '${Tk}'`);
   }
 }
 

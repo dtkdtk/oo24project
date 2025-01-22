@@ -9,3 +9,13 @@ export declare class IStack<T> {
 }
 
 export declare const __Any: any;
+
+/**
+ * Сущность (например, коллекция), которая имеет метку (некое название).
+ */
+export type Labelled<_Ty extends object> = _Ty & { xLabel: string };
+
+/**
+ * **Мутирует** указанный объект, добавляя ему поле с меткой - `xLabel`.
+ */
+export function Labelled<_Ty extends object>(xLabel: string, Origin: _Ty): Labelled<_Ty>;

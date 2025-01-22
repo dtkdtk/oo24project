@@ -5,3 +5,8 @@ export class IStack extends Array {
 }
 
 export const __Any = undefined;
+
+export function Labelled(xLabel, Origin) {
+  Origin.xLabel = xLabel;
+  return Origin;
+}

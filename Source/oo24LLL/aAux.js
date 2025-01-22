@@ -11,7 +11,7 @@ export * from "./AuxReprConversions.js";
  * @returns {never}
  */
 export function ThrowRuntimeExc(S, Msg) {
-  console.error("LLL Runtime exception: " + Msg + "\n");
+  console.error(`LLL Runtime exception: (${S.ScriptFileName}:${S.CurrentInterpretingLineIndex}) ${Msg} \n`);
   console.error(GetStateTrace(S));
   throw "LLL RuntimeException";
 }
