@@ -19,23 +19,27 @@ export function OmitKeysFrom(Source, ...Keys) {
 /**
  * (форматирование) Дополняет строку до указанной длины пробелами.
  * 
- * Пробелы ставятся **перед строкой**.
+ * По умолчанию, пробелы ставятся **ПЕРЕД строкой**.
  * @param {number} TargetLength
  * @param {string} Str
+ * @param {"PREFIX" | "SUFFIX"} Position
  * @returns {string}
  */
-export function CompleteToLength_Prefix(TargetLength, Str) {
-  let Prefix = "";
+export function CompleteToLength(TargetLength, Str, Position = "PREFIX") {
+  let ToAppend = "";
   const Needed = TargetLength - Str.length;
 
   if (Needed < 0) {
-    console.warn(`INTERNAL BUG: 'Source/Utils: CompleteToLength_Prefix()': Given Str length greater than TargetLength.`);
+    console.warn(`INTERNAL BUG: 'Source/Utils: CompleteToLength()': Given Str length greater than TargetLength.`);
     return Str;
   }
 
   if (Needed > 0)
-    Prefix += " ".repeat(Needed);
-  return Prefix + Str;
+    ToAppend += " ".repeat(Needed);
+  if (Position == "PREFIX")
+    return ToAppend + Str;
+  else
+    return Str + ToAppend;
 }
 
 

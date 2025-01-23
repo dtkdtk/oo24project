@@ -5,11 +5,6 @@ import * as CoGr from "./CommonGrammar.js";
 
 
 
-/* TYPES: */
-/**
- * @typedef {"IgnoreWord"} _KnownPragmaKeys
- */
-
 /**
  * @param {string} AllCode 
  */

@@ -1,4 +1,3 @@
-
 import { GetStateTrace } from "./AuxStateTrace.js";
 
 export * from "./AuxStateTrace.js";
@@ -11,9 +10,14 @@ export * from "./AuxReprConversions.js";
  * @returns {never}
  */
 export function ThrowRuntimeExc(S, Msg) {
-  console.error(`LLL Runtime exception: (${S.ScriptFileName}:${S.CurrentInterpretingLineIndex}) ${Msg} \n`);
-  console.error(GetStateTrace(S));
-  throw "LLL RuntimeException";
+  /* Обратите внимание: Здесь мы не имеем права пользоваться
+   всякими 'throw' / 'process.exit()' - используем вместо этого
+   'LLL_STATE#_ErrorHandler()'.
+  А ещё, вместо 'console.*' используем 'LLL_STATE#Std(OUT/ERR)'. */
+  S.StdERR.write(`LLL Runtime exception: (${S.ScriptFileName}:${S.CurrentInterpretingLineIndex}) ${Msg}\n\n`);
+  S.StdERR.write(GetStateTrace(S));
+  S.StdERR.write("\n\n");
+  S._ExceptionHandler("LLL RuntimeException");
 }
 
 /**

@@ -19,16 +19,12 @@ export class LLL_STATE {
   ScriptMetadata = {};
 
   /**
-   * @type {{}}
-   * @readonly
-   */
-  Pragmas = {};
-
-  /**
    * @type {string[]}
    * @readonly
    */
-  StringsTable = [];
+  StringsTable = [
+    "" //Строка с индексом (0) - пустая строка.
+  ];
 
   /**
    * @type {libUtilsTy.IStack<llval_ty>}
@@ -47,17 +43,17 @@ export class LLL_STATE {
     libUtilsTy.Labelled("<global>", new Map()),
   );
 
-  ScriptFileName = "???";
+  ScriptFileName = "no-file";
 
   /**
    * Интерпретируемое в данный момент слово.
    */
-  CurrentInterpretingWord = ""; //Ответственность - за функциями интерпретации
+  CurrentInterpretingWord = ""; //Ответственность - за Читателем
 
   /**
    * Интерпретируемая в данный момент строка (её номер).
    */
-  CurrentInterpretingLineIndex = 0; //Ответственность - за функциями интерпретации
+  CurrentInterpretingLineIndex = 0; //Ответственность - за Читателем
 
   /**
    * Текущий поток ввода (`stdin`)
@@ -73,6 +69,14 @@ export class LLL_STATE {
    * Текущий поток вывода ошибок (`stderr`)
    */
   StdERR = process.stderr;
+
+  /**
+   * Обработчик ошибок (исключений) **на уровне платформы.**
+   * @type {(ExcClass: _KnownExceptionClasses) => never}
+   */
+  _ExceptionHandler = (ExcClass) => {
+    throw ExcClass;
+  };
 }
 
 

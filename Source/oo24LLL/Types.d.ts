@@ -2,8 +2,9 @@ declare type LLL_STATE = import("./TheMachine.js").LLL_STATE;
 declare type TheReaderStream = import("./TheMachine.js").TheReaderStream;
 declare type WordDefinitionFragment = import("./TheMachine.js").WordDefinitionFragment;
 
-declare type NativeJsFunction = (S: LLL_STATE, ws: TheReaderStream) => unknown;
+declare type NativeJsFunction = (S: LLL_STATE, Reader: TheReaderStream) => unknown;
 declare type IntSize = 1 | 2 | 4 | 8;
+declare type _KnownExceptionClasses = "LLL RuntimeException";
 
 
 

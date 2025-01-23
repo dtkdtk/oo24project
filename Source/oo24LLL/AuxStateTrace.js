@@ -25,9 +25,9 @@ export function GetStateTrace(S) {
     for (let i = 0; i < Entries.length; i++) {
       const [Key, Value] = Entries[i];
       Buf += "\t";
-      Buf += LibUtils.CompleteToLength_Prefix(IndexLength, i.toString());
+      Buf += LibUtils.CompleteToLength(IndexLength, i.toString());
       Buf += "| ";
-      Buf += LibUtils.CompleteToLength_Prefix(MaxKeyLength, Key);
+      Buf += LibUtils.CompleteToLength(MaxKeyLength, Key);
       Buf += " | ";
       Buf += LibUtils.ClampToLength(TARGET_TERMINAL_WIDTH - MaxKeyLength, ReprAs_String(S, Value));
       Buf += "\n";
@@ -47,7 +47,7 @@ export function GetStateTrace(S) {
     const IndexLength = MaxIndex.toString().length;
     for (let i = 0; i < S.StringsTable.length; i++) {
       Buf += "\t";
-      Buf += LibUtils.CompleteToLength_Prefix(IndexLength, i.toString());
+      Buf += LibUtils.CompleteToLength(IndexLength, i.toString());
       Buf += "| ";
       Buf += LibUtils.ClampToLength(TARGET_TERMINAL_WIDTH, S.StringsTable[i]);
       Buf += "\n";
@@ -70,7 +70,7 @@ export function GetStateTrace(S) {
     Buf += "\n";
     for (let i = S.Stack.length - 2; i >= 0; i--) {
       Buf += "\t";
-      Buf += LibUtils.CompleteToLength_Prefix(IndexLength, (i - MaxIndex).toString());
+      Buf += LibUtils.CompleteToLength(IndexLength, (i - MaxIndex).toString());
       Buf += "| ";
       Buf += LibUtils.ClampToLength(TARGET_TERMINAL_WIDTH, _Represent(S, S.Stack[i]).toString());
       Buf += "\n";
@@ -88,11 +88,18 @@ export function GetStateTrace(S) {
     
     const MaxIndex = S.Closures.length - 1;
     const IndexLength = LibUtils.ClampNumber.OnlyMin(3, MaxIndex.toString().length);
+    const AllLabels = [];
+    for (let i = 0; i < S.Closures.length; i++) {
+      AllLabels.push(S.Closures[i].xLabel);
+    }
+    const MaxLabelLength = [...AllLabels].sort(( labelA,labelB ) => labelB.length - labelA.length)[0].length;
     ;{
-      const IndexDisplay = "\t" + LibUtils.CompleteToLength_Prefix(IndexLength, "TOP") + "| ";
+      const IndexDisplay = "\t" + LibUtils.CompleteToLength(IndexLength, "TOP") + "| ";
+      const LabelDisplay = LibUtils.CompleteToLength(MaxLabelLength, AllLabels[AllLabels.length - 1], "SUFFIX") + " | ";
       const Words = Array.from(S.Closures[S.Closures.length - 1].keys());
       const WordsMosaic = LibUtils.FitStringsInLength(Words, TARGET_TERMINAL_WIDTH, 1);
       Buf += IndexDisplay;
+      Buf += LabelDisplay;
       Buf += WordsMosaic
         .map(it => it.join(" "))
         .join("\n" + IndexDisplay);
@@ -100,11 +107,13 @@ export function GetStateTrace(S) {
     };
     for (let i = S.Closures.length - 2; i >= 0; i--) {
       const IndexDisplay = "\t"
-        + LibUtils.CompleteToLength_Prefix(IndexLength, (i - MaxIndex).toString())
+        + LibUtils.CompleteToLength(IndexLength, (i - MaxIndex).toString())
         + "| ";
+      const LabelDisplay = LibUtils.CompleteToLength(MaxLabelLength, AllLabels[i], "SUFFIX") + " | ";
       const Words = Array.from(S.Closures[i].keys());
       const WordsMosaic = LibUtils.FitStringsInLength(Words, TARGET_TERMINAL_WIDTH, 1);
       Buf += IndexDisplay;
+      Buf += LabelDisplay;
       Buf += WordsMosaic
         .map(it => it.join(" "))
         .join("\n" + IndexDisplay);

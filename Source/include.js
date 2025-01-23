@@ -2,6 +2,7 @@ export * from "./Utils-typed.js";
 export * from "./Utils.js";
 export * from "./oo24LLL/AuxReprConversions.js";
 export * from "./oo24LLL/AuxStateTrace.js";
+export * from "./oo24LLL/CommonGrammar.js";
 export * from "./oo24LLL/DictStd.js";
 export * from "./oo24LLL/DictSyntax.js";
 export * from "./oo24LLL/TheMachine.js";

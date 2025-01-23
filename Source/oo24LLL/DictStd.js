@@ -55,7 +55,7 @@ export default Labelled("<std>", new Map(Object.entries({
     string: (S, Reader) => {
       aux.AssertStackLength(S, 1);
       const StrIndex = aux.Pop_Number(S);
-      aux.Assert_Here(S, StrIndex >= 0 && StrIndex < S.StringsTable.length, `String with index '${StrIndex}' not found.`);
+      aux.Assert_Here(S, StrIndex >= 0 && StrIndex <= S.StringsTable.length, `String with index '${StrIndex}' not found.`);
   
       const StringFromTable = S.StringsTable[StrIndex];
       aux.Assert_Here(S, StringFromTable !== undefined, `String not found.`);
