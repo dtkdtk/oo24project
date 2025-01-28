@@ -455,7 +455,7 @@ var LLL_STATE = class {
    */
   aux = AuxOf(this);
   /**
-   * @type {Record<string, llval_ty>}
+   * @type {Record<string, llval_t>}
    * @readonly
    */
   ScriptMetadata = {};
@@ -470,13 +470,13 @@ var LLL_STATE = class {
    */
   StringsTable = [];
   /**
-   * @type {libUtilsTy.IStack<llval_ty>}
+   * @type {libUtilsTy.IStack<llval_t>}
    * @readonly
    */
   Stack = new IStack();
   /**
    * Стек *замыканий*: областей видимости слов(функций) и переменных.
-   * @type {libUtilsTy.IStack<Map<string, llval_ty | NativeJsFunction | _WordStream>>}
+   * @type {libUtilsTy.IStack<Map<string, llval_t | NativeJsFunction | _WordStream>>}
    * @readonly
    */
   Closures = new IStack(

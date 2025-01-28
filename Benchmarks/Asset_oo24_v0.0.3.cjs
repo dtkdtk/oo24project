@@ -32,7 +32,7 @@ __export(include_exports, {
   IsInteger: () => IsInteger,
   LLL_EXECUTE: () => LLL_EXECUTE,
   LLL_STATE: () => LLL_STATE,
-  MaybeReprAs_Number: () => MaybeReprAs_Number,
+  MaybeAs_Number: () => MaybeAs_Number,
   OmitKeysFrom: () => OmitKeysFrom,
   Pop_Number: () => Pop_Number,
   Pop_String: () => Pop_String,
@@ -218,7 +218,7 @@ function GetStateTrace(S) {
   return Buf;
 }
 function _Represent(S, Rtvalue) {
-  return MaybeReprAs_Number(S, Rtvalue) ?? ReprAs_String(S, Rtvalue);
+  return MaybeAs_Number(S, Rtvalue) ?? ReprAs_String(S, Rtvalue);
 }
 
 // Source/oo24LLL/aAux.js
@@ -260,7 +260,7 @@ function RtvalueOf_Number(S, NumRepr) {
 function RtvalueOf_String(S, StrRepr) {
   return StrRepr;
 }
-function MaybeReprAs_Number(S, Rtvalue) {
+function MaybeAs_Number(S, Rtvalue) {
   if (typeof Rtvalue == "number")
     return Rtvalue;
   const AsNumber = Number(Rtvalue);
@@ -269,7 +269,7 @@ function MaybeReprAs_Number(S, Rtvalue) {
   return AsNumber;
 }
 function ReprAs_Number(S, Rtvalue) {
-  const AsNumber = MaybeReprAs_Number(S, Rtvalue);
+  const AsNumber = MaybeAs_Number(S, Rtvalue);
   if (AsNumber === null)
     return ThrowRuntimeExc_Here(S, `The given value cannot be converted to Integer.`);
   ;
@@ -393,7 +393,7 @@ var DictSyntax_default = new Map(Object.entries({
 // Source/oo24LLL/TheMachine.js
 var LLL_STATE = class {
   /**
-   * @type {Record<string, llval_ty>}
+   * @type {Record<string, llval_t>}
    * @readonly
    */
   ScriptMetadata = {};
@@ -408,13 +408,13 @@ var LLL_STATE = class {
    */
   StringsTable = [];
   /**
-   * @type {libUtilsTy.IStack<llval_ty>}
+   * @type {libUtilsTy.IStack<llval_t>}
    * @readonly
    */
   Stack = new IStack();
   /**
    * Стек *замыканий*: областей видимости слов(функций) и переменных.
-   * @type {libUtilsTy.IStack<Map<string, llval_ty | NativeJsFunction | TheReaderStream>>}
+   * @type {libUtilsTy.IStack<Map<string, llval_t | NativeJsFunction | TheReaderStream>>}
    * @readonly
    */
   Closures = new IStack(
@@ -790,7 +790,7 @@ function ParseValue(S, Value) {
   IsInteger,
   LLL_EXECUTE,
   LLL_STATE,
-  MaybeReprAs_Number,
+  MaybeAs_Number,
   OmitKeysFrom,
   Pop_Number,
   Pop_String,

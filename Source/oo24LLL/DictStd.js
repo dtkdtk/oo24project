@@ -16,7 +16,7 @@ export default Labelled("<std>", new Map(Object.entries({
      * @signature `[value] dup`
      * @since `v0.0.1`
      */
-    dup: (S, Reader) => {
+    dup: (S) => {
       aux.AssertStackLength(S, 1);
       S.Stack.push(S.Stack.peek());
     },
@@ -26,7 +26,7 @@ export default Labelled("<std>", new Map(Object.entries({
      * @signature `[value] [(top)] dupsub`
      * @since `v0.0.2`
      */
-    dupsub: (S, Reader) => {
+    dupsub: (S) => {
       aux.AssertStackLength(S, 2);
       const Top = S.Stack.pop();
       const Subtop = S.Stack.peek();
@@ -39,7 +39,7 @@ export default Labelled("<std>", new Map(Object.entries({
      * @signature `[value] drop`
      * @since `v0.0.2`
      */
-    drop: (S, Reader) => {
+    drop: (S) => {
       aux.AssertStackLength(S, 1);
       S.Stack.pop();
     },
@@ -52,15 +52,15 @@ export default Labelled("<std>", new Map(Object.entries({
      * @signature `[strindex] string`
      * @since `v0.0.1`
      */
-    string: (S, Reader) => {
+    string: (S) => {
       aux.AssertStackLength(S, 1);
       const StrIndex = aux.Pop_Number(S);
-      aux.Assert_Here(S, StrIndex >= 0 && StrIndex <= S.StringsTable.length, `String with index '${StrIndex}' not found.`);
+      aux.Assert(S, StrIndex >= 0 && StrIndex <= S.StringsTable.length, `String with index '${StrIndex}' not found.`);
   
       const StringFromTable = S.StringsTable[StrIndex];
-      aux.Assert_Here(S, StringFromTable !== undefined, `String not found.`);
+      aux.Assert(S, StringFromTable !== undefined, `String not found.`);
   
-      S.Stack.push(aux.RtvalueOf_String(S, StringFromTable));
+      S.Stack.push(StringFromTable);
     },
   
     /**
@@ -68,11 +68,11 @@ export default Labelled("<std>", new Map(Object.entries({
      * @signature `[dest] [source] concat`
      * @since `v0.0.1`
      */
-    concat: (S, Reader) => {
+    concat: (S) => {
       aux.AssertStackLength(S, 2);
       const Source = aux.Pop_String(S);
       const Dest = aux.Pop_String(S);
-      S.Stack.push(aux.RtvalueOf(S, Source.concat(Dest)));
+      S.Stack.push(Source.concat(Dest));
     },
   
     /**
@@ -80,9 +80,9 @@ export default Labelled("<std>", new Map(Object.entries({
      * @signature `[value] print`
      * @since `v0.0.1`
      */
-    print: (S, Reader) => {
+    print: (S) => {
       aux.AssertStackLength(S, 1);
-      S.StdOUT.write(aux.Pop_String(S));
+      S.StdOUT(aux.Pop_String(S));
     },
     
   ////////////////////////////////////////////////////////////////////////////////////////
@@ -93,35 +93,35 @@ export default Labelled("<std>", new Map(Object.entries({
      * @since `v0.0.1`
      */
   
-    sum: (S, Reader) => {
+    sum: (S) => {
       aux.AssertStackLength(S, 2);
       const From = aux.Pop_Number(S);
       const To = aux.Pop_Number(S);
-      S.Stack.push(aux.RtvalueOf(S, From + To));
+      S.Stack.push(From + To);
     },
-    sub: (S, Reader) => {
+    sub: (S) => {
       aux.AssertStackLength(S, 2);
       const From = aux.Pop_Number(S);
       const To = aux.Pop_Number(S);
-      S.Stack.push(aux.RtvalueOf(S, From - To));
+      S.Stack.push(From - To);
     },
-    mul: (S, Reader) => {
+    mul: (S) => {
       aux.AssertStackLength(S, 2);
       const From = aux.Pop_Number(S);
       const To = aux.Pop_Number(S);
-      S.Stack.push(aux.RtvalueOf(S, From * To));
+      S.Stack.push(From * To);
     },
-    div: (S, Reader) => {
+    div: (S) => {
       aux.AssertStackLength(S, 2);
       const From = aux.Pop_Number(S);
       const To = aux.Pop_Number(S);
-      S.Stack.push(aux.RtvalueOf(S, ~~(From / To) ));
+      S.Stack.push(Math.floor(From / To));
     },
-    mod: (S, Reader) => {
+    mod: (S) => {
       aux.AssertStackLength(S, 2);
       const From = aux.Pop_Number(S);
       const To = aux.Pop_Number(S);
-      S.Stack.push(aux.RtvalueOf(S, From % To));
+      S.Stack.push(From % To);
     },
   
   })));

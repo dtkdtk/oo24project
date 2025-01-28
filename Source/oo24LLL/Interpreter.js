@@ -1,4 +1,4 @@
-import { LLL_STATE, TheReaderStream } from "./TheMachine.js";
+import { LLL_STATE, TheReaderStream, WordDefinitionFragment } from "./TheMachine.js";
 import { RemoveSuffix } from "../Utils.js";
 import * as aux from "./aAux.js";
 import * as CoGr from "./CommonGrammar.js";
@@ -10,10 +10,11 @@ import * as CoGr from "./CommonGrammar.js";
  */
 export function LLL_EXECUTE(AllCode, S = new LLL_STATE()) {
   const Reader = new TheReaderStream(AllCode);
-  InterpretPrelude(S, Reader);
+  S.TheReader = Reader;
+  InterpretPrelude(S);
   if (AllCode.length == 0) return;
 
-  InterpretMainCode(S, Reader);
+  InterpretMainCode(S);
 }
 
 
@@ -28,48 +29,46 @@ export function LLL_EXECUTE(AllCode, S = new LLL_STATE()) {
  * 
  * Таблица строк интерпретируется **внутри** Прелюдии.
  * @param {LLL_STATE} S 
- * @param {TheReaderStream} Reader
  */
-function InterpretPrelude(S, Reader) {
-  S.CurrentInterpretingWord = "<prelude>";
+function InterpretPrelude(S) {
+  S.AdditionalLocationInfo = "<prelude>";
   let ExplicitPreludeScope = false; //явное указание начала и конца Прелюдии?
-  while (!Reader.IsCodeEnd) {
-    const Instruction = Reader.PeekUnit();
-    S.CurrentInterpretingLineIndex = Reader.LineIndex;
+  while (!S.TheReader.IsCodeEnd) {
+    const Instruction = S.TheReader.PeekUnit();
     switch (Instruction) {
       case CoGr.Prelude.META: {
-        Reader.GrabUnit(); //Двигаем поток вперёд, ибо 'Instruction' не извлечена из потока
-        let PropertyKey = Reader.GrabUnit();
+        S.TheReader.GrabUnit(); //Двигаем поток вперёд, ибо 'Instruction' не извлечена из потока
+        let PropertyKey = S.TheReader.GrabUnit();
 
-        Reader.Options.HandleInlineComments = false;
-        Reader.Options.HandleCommentLines = false;
-        Reader.Options.UnitBound = "\n";
-        let PropertyValue = Reader.GrabUnit();
-        Reader.Options.HandleInlineComments = true;
-        Reader.Options.HandleCommentLines = true;
-        Reader.Options.UnitBound = " ";
+        S.TheReader.Options.HandleInlineComments = false;
+        S.TheReader.Options.HandleCommentLines = false;
+        S.TheReader.Options.UnitBound = "\n";
+        let PropertyValue = S.TheReader.GrabUnit();
+        S.TheReader.Options.HandleInlineComments = true;
+        S.TheReader.Options.HandleCommentLines = true;
+        S.TheReader.Options.UnitBound = " ";
 
         PropertyKey = RemoveSuffix(PropertyKey, ":");
-        S.ScriptMetadata[PropertyKey] = ParseValue(S, PropertyValue);
+        S.ScriptMetadata[PropertyKey] = aux.MaybeAs_Number(S, PropertyValue) ?? PropertyValue;
         break;
       }
       case CoGr.Prelude.STRTABLE_START: {
-        Reader.GrabUnit(); //Двигаем поток вперёд, ибо 'Instruction' не извлечена из потока
-        InterpretStringsTable(S, Reader);
+        S.TheReader.GrabUnit(); //Двигаем поток вперёд, ибо 'Instruction' не извлечена из потока
+        InterpretStringsTable(S);
         break;
       }
       case CoGr.Prelude.EXPLICIT_START_PRELUDE:
-        Reader.GrabUnit(); //Двигаем поток вперёд, ибо 'Instruction' не извлечена из потока
+        S.TheReader.GrabUnit(); //Двигаем поток вперёд, ибо 'Instruction' не извлечена из потока
         ExplicitPreludeScope = true;
         break;
       case CoGr.Prelude.EXPLICIT_END_PRELUDE:
-        Reader.GrabUnit(); //Двигаем поток вперёд, ибо 'Instruction' не извлечена из потока
+        S.TheReader.GrabUnit(); //Двигаем поток вперёд, ибо 'Instruction' не извлечена из потока
         if (!ExplicitPreludeScope)
-          return aux.ThrowRuntimeExc_Here(S, `If there is an explicit end of the Prelude, there must also be an explicit beginning.`);
+          aux.ThrowRuntimeExc(S, `If there is an explicit end of the Prelude, there must also be an explicit beginning.`);
         return;
       default: //не спец.инструкция Прелюдии => мы вышли из неё
         if (ExplicitPreludeScope)
-          return aux.ThrowRuntimeExc_Here(S, `Expected an explicit end of the Prelude (because the beginning is explicitly specified).`);
+          aux.ThrowRuntimeExc(S, `Expected an explicit end of the Prelude (because the beginning is explicitly specified).`);
         return;
     }
   }
@@ -80,22 +79,20 @@ function InterpretPrelude(S, Reader) {
 /**
  * Отдельный интерпретатор для *таблицы строк*.
  * @param {LLL_STATE} S
- * @param {TheReaderStream} Reader
  */
-function InterpretStringsTable(S, Reader) {
-  S.CurrentInterpretingWord = "<prelude/StringsTable>";
-  Reader.Options.UnitBound = "\n";
-  Reader.Options.SkipEmptyUnits = false;
-  interpreting: while (!Reader.IsCodeEnd) {
-    let Line = Reader.GrabUnit();
-    S.CurrentInterpretingLineIndex = Reader.LineIndex;
+function InterpretStringsTable(S) {
+  S.AdditionalLocationInfo = "<prelude/StringsTable>";
+  S.TheReader.Options.UnitBound = "\n";
+  S.TheReader.Options.SkipEmptyUnits = false;
+  interpreting: while (!S.TheReader.IsCodeEnd) {
+    let Line = S.TheReader.GrabUnit();
     let Content = "";
 
     if (Line == CoGr.Prelude.STRTABLE_ELEMENT_START) {
-      Reader.Options.HandleInlineComments = false;
-      Reader.Options.HandleCommentLines = false;
-      readingString: while (!Reader.IsCodeEnd) {
-        const Line = Reader.GrabUnit();
+      S.TheReader.Options.HandleInlineComments = false;
+      S.TheReader.Options.HandleCommentLines = false;
+      readingString: while (!S.TheReader.IsCodeEnd) {
+        const Line = S.TheReader.GrabUnit();
         if (Line == "END") {
           Content = HandleCharacterEscaping(S, Content);
           S.StringsTable.push(Content);
@@ -111,20 +108,20 @@ function InterpretStringsTable(S, Reader) {
           Content += "\n"
         Content += Line;
       }
-      return aux.ThrowRuntimeExc_Here(S, `Expected '${CoGr.Prelude.STRTABLE_ELEMENT_END}' at end of string.`);
+      aux.ThrowRuntimeExc(S, `Expected '${CoGr.Prelude.STRTABLE_ELEMENT_END}' at end of string.`);
     }
     else if (Line == CoGr.Prelude.STRTABLE_END) {
-      Reader.Options.HandleCommentLines = true;
-      Reader.Options.HandleInlineComments = true;
-      Reader.Options.DrainOnNewline = true;
-      Reader.Options.UnitBound = " ";
-      Reader.Options.SkipEmptyUnits = true;
+      S.TheReader.Options.HandleCommentLines = true;
+      S.TheReader.Options.HandleInlineComments = true;
+      S.TheReader.Options.DrainOnNewline = true;
+      S.TheReader.Options.UnitBound = " ";
+      S.TheReader.Options.SkipEmptyUnits = true;
       return;
     }
     else
-      return aux.ThrowRuntimeExc_Here(S, `Failed to process this line from string table block: '${Line}'`);
+      aux.ThrowRuntimeExc(S, `Failed to process this line from string table block: '${Line}'`);
   }
-  return aux.ThrowRuntimeExc_Here(S, `Expected '${CoGr.Prelude.STRTABLE_END}' at end of string table block.`);
+  aux.ThrowRuntimeExc(S, `Expected '${CoGr.Prelude.STRTABLE_END}' at end of string table block.`);
 }
 
 
@@ -132,14 +129,17 @@ function InterpretStringsTable(S, Reader) {
 /**
  * Интерпретатор **И ИСПОЛНИТЕЛЬ** основной части кода.
  * @param {LLL_STATE} S 
- * @param {TheReaderStream} Reader 
  */
-function InterpretMainCode(S, Reader) {
-  interpreting: while (!Reader.IsCodeEnd) {
-    const Tk = Reader.GrabUnit();
-    S.CurrentInterpretingWord = Tk;
-    S.CurrentInterpretingLineIndex = Reader.LineIndex;
-    const MaybeAsNumber = aux.MaybeReprAs_Number(S, Tk);
+function InterpretMainCode(S) {
+  S.AdditionalLocationInfo = null;
+  interpreting: while (!S.TheReader.IsCodeEnd) {
+    const Tk = S.TheReader.GrabUnit();
+    if (Tk.length > 1 && Tk.startsWith('"') && Tk.endsWith('"')) {
+      const Handled = _Unquote(Tk);
+      S.Stack.push(Handled); //не ищем определение
+      continue interpreting;
+    }
+    const MaybeAsNumber = aux.MaybeAs_Number(S, Tk);
     if (MaybeAsNumber !== null) {
       S.Stack.push(MaybeAsNumber);
       continue interpreting;
@@ -158,15 +158,22 @@ function InterpretMainCode(S, Reader) {
           continue interpreting;
 
         case "function": //нашли, нативный JS
-          Definition(S, Reader);
+          Definition(S);
           continue interpreting;
 
+        case "object":
+          if (Definition instanceof WordDefinitionFragment) {
+            S.TheReader.GotoDefinition(Definition);
+            continue interpreting;
+          }
+          else continue;
+
         default:
-          aux.ThrowRuntimeExc_Here(S, `[internal] Unsupported JavaScript-runtime datatype: '${typeof Tk}'`);
+          aux.ThrowRuntimeExc(S, `[internal] Unsupported JavaScript-runtime definition type: '${typeof Definition}'`);
       }
     }
     //не нашли определение ни в одном замыкании
-    return aux.ThrowRuntimeExc_Here(S, `Undefined word: '${Tk}'`);
+    S.Stack.push(Tk);
   }
 }
 
@@ -193,7 +200,7 @@ function HandleCharacterEscaping(S, AllCode) {
     const MatchIndex = AllCode.indexOf("\\", PreviousIndex + 2);
     if (MatchIndex == -1) break;
     if (MatchIndex + 1 == AllCode.length)
-      return aux.ThrowRuntimeExc_Here(S, `Expected escape character, got end of string`);
+      aux.ThrowRuntimeExc(S, `Expected escape character, got end of string`);
     NewCode += AllCode.slice(PreviousIndex, MatchIndex);
     PreviousIndex = MatchIndex;
     switch (AllCode[MatchIndex + 1]) {
@@ -219,7 +226,7 @@ function HandleCharacterEscaping(S, AllCode) {
         AllCode = AllCode.slice(MatchIndex + 3);
         continue theLoop;
       default:
-        return aux.ThrowRuntimeExc_Here(S, `Non-existent special character: '\\${AllCode[MatchIndex + 1]}'`);
+        aux.ThrowRuntimeExc(S, `Non-existent special character: '\\${AllCode[MatchIndex + 1]}'`);
     }
   }
   NewCode += AllCode.slice(PreviousIndex, AllCode.length);
@@ -229,15 +236,11 @@ function HandleCharacterEscaping(S, AllCode) {
 
 
 /**
- * Парсит значение и конвертирует его в runtime-тип данных.
- * @param {LLL_STATE} S
- * @param {string} Value 
- * @returns {llval_ty}
+ * Убирает кавычки с начала и с конца строки.
+ * @param {string} Target 
+ * @returns {string}
  */
-function ParseValue(S, Value) {
-  const AsNumber = Number(Value);
-  if (!isNaN(AsNumber))
-    return aux.RtvalueOf_Number(S, AsNumber);
-  else //однозначно строка; других значений у нас пока нет
-    return aux.RtvalueOf_String(S, Value);
+function _Unquote(Target) {
+  if (Target.length <= 2) return "";
+  return Target.slice(1, Target.length - 1);
 }

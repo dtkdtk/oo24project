@@ -1,9 +1,13 @@
 export declare class IStack<T> {
-  constructor(...values: T[]);
+  /** Для создания используйте статические методы */
+  private constructor();
+  static createSized<T>(size: number): IStack<T>;
+  static createAndFill<T>(...items: T[]): IStack<T>;
+  static create<T>(): IStack<T>;
 
   [i: number]: T;
   readonly length: number;
-  push(...items: T[]): void;
+  push(...items: T[]): this;
   pop(): T;
   peek(): T;
 }

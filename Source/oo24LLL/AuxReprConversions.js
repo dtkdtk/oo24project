@@ -1,58 +1,18 @@
 import * as aux from "./aAux.js";
 
 /**
- * Конвертирует указанное представление в runtime-значение.
- * 
- * *Представление* -> __*Значение*__
- * @param {LLL_STATE} S
- * @param {llrepr_ANY_ty} Repr
- * @returns {llval_ty}
- */
-export function RtvalueOf(S, Repr) {
-  return Repr; //забавно, не так ли?
-  //заглушка под натив.
-}
-
-/**
- * Специализация {@link RtvalueOf()} для чисел (тип `Integer|Float`).
- * 
- * *Представление* -> __*Значение*__
- * @param {LLL_STATE} S
- * @param {llrepr_number_ty} NumRepr 
- * @returns {llval_ty}
- */
-export function RtvalueOf_Number(S, NumRepr) {
-  return NumRepr;
-  //заглушка под натив.
-}
-
-/**
- * Специализация {@link RtvalueOf()} для строк (тип `String`).
- * 
- * *Представление* -> __*Значение*__
- * @param {LLL_STATE} S
- * @param {llrepr_string_ty} StrRepr 
- * @returns {llval_ty}
- */
-export function RtvalueOf_String(S, StrRepr) {
-  return StrRepr;
-  //заглушка под натив.
-}
-
-/**
  * ПЫТАЕТСЯ конвертировать runtime-значение в число (тип `Integer|Float`).
  * Если не получается - возвращает `null` вместо ошибки.
  * 
- * *Значение* -> __*Представление*__
  * @param {LLL_STATE} S 
- * @param {llval_ty} Rtvalue 
- * @returns {llrepr_number_ty | null}
+ * @param {llval_t} Value 
+ * @returns {number | null}
  */
-export function MaybeReprAs_Number(S, Rtvalue) {
-  if (typeof Rtvalue == "number")
-    return Rtvalue;
+export function MaybeAs_Number(S, Value) {
+  if (typeof Value == "number")
+    return Value;
 
-  const AsNumber = Number(Rtvalue);
+  const AsNumber = Number(Value);
   if (isNaN(AsNumber))
     return null;
   return AsNumber;
@@ -63,27 +23,25 @@ export function MaybeReprAs_Number(S, Rtvalue) {
 /**
  * Конвертирует runtime-значение в число (тип `Integer|Float`).
  * 
- * *Значение* -> __*Представление*__
  * @param {LLL_STATE} S
- * @param {llval_ty} Rtvalue
- * @returns {llrepr_number_ty | never}
+ * @param {llval_t} Rtvalue
+ * @returns {number | never}
  */
-export function ReprAs_Number(S, Rtvalue) {
-  const AsNumber = MaybeReprAs_Number(S, Rtvalue);
+export function As_Number(S, Rtvalue) {
+  const AsNumber = MaybeAs_Number(S, Rtvalue);
   if (AsNumber === null)
-    return aux.ThrowRuntimeExc_Here(S, `The given value cannot be converted to Integer.`);;
+    aux.ThrowRuntimeExc(S, `The given value cannot be converted to Integer/Float.`);;
   return AsNumber;
 }
 
 /**
  * Конвертирует runtime-значение в UTF-8 строку (тип `String`).
  * 
- * *Значение* -> __*Представление*__
  * @param {LLL_STATE} S
- * @param {llval_ty} Rtvalue
- * @returns {llrepr_string_ty}
+ * @param {llval_t} Rtvalue
+ * @returns {string}
  */
-export function ReprAs_String(S, Rtvalue) {
+export function As_String(S, Rtvalue) {
   return String(Rtvalue);
 }
 
@@ -95,10 +53,10 @@ export function ReprAs_String(S, Rtvalue) {
  * 
  * Проверка длины стека - на вашей совести!
  * @param {LLL_STATE} S
- * @returns {llrepr_number_ty}
+ * @returns {number}
  */
 export function Pop_Number(S) {
-  return ReprAs_Number(S, S.Stack.pop());
+  return As_Number(S, S.Stack.pop());
 }
 
 /**
@@ -107,8 +65,8 @@ export function Pop_Number(S) {
  * 
  * Проверка длины стека - на вашей совести!
  * @param {LLL_STATE} S
- * @returns {llrepr_string_ty}
+ * @returns {string}
  */
 export function Pop_String(S) {
-  return ReprAs_String(S, S.Stack.pop());
+  return As_String(S, S.Stack.pop());
 }

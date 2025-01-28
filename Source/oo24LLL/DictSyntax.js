@@ -1,11 +1,9 @@
 import { Labelled } from "../Utils-typed.js";
-import * as aux from "./aAux.js";
 import { WordDefinitionFragment } from "./TheMachine.js";
+import * as aux from "./aAux.js";
+import * as CoGr from "./CommonGrammar.js";
 
-const Complex = {
-  DEFINE: "DEFINE...",
-};
-const _AllComplexConstructions = Object.values(Complex);
+const _AllComplexConstructions = Object.values(CoGr.Constrct);
 
 /**
  * @internal
@@ -14,42 +12,46 @@ const _AllComplexConstructions = Object.values(Complex);
  * @type {Labelled<Map<string, NativeJsFunction>>}
  */
 export default Labelled("<lang>", new Map(Object.entries({
-  DEFINE: (S, Reader) => {
+  [CoGr.Instr.DEFINE_VAR]: (S) => {
     aux.AssertStackLength(S, 2);
     const VarName = aux.Pop_String(S);
     const Value = S.Stack.pop();
     S.Closures.peek().set(VarName, Value);
   },
 
-  [Complex.DEFINE]: (S, Reader) => {
+  [CoGr.Constrct.DEFINE_FUNC]: (S) => {
+    aux.AssertStackLength(S, 1);
     const VarName = aux.Pop_String(S);
-    const Bounds = InterpretCodeblock(S, Reader, VarName);
-    console.log("<<" + Reader.__AllCode.slice(Bounds.StartsAt, Bounds.EndsAt + 1) + ">>");
+    const Bounds = InterpretCodeblock(S, VarName);
     S.Closures.peek().set(VarName, Bounds);
   },
+
 })));
 
 
 
 /**
  * @param {LLL_STATE} S 
- * @param {TheReaderStream} Reader 
  * @param {string} Label 
  * @returns {WordDefinitionFragment}
  */
-function InterpretCodeblock(S, Reader, Label) {
-  const StartPos = Reader.Pos;
+function InterpretCodeblock(S, Label) {
+  S.AdditionalLocationInfo = Label;
+  const StartPos = S.TheReader.Pos;
+  let EndPos = 0;
   let Depth = 0;
-  let Instruction;
-  while (Instruction = Reader.GrabUnit(), true) {
+  while (!S.TheReader.IsCodeEnd) {
+    const Instruction = S.TheReader.GrabUnit();
     if (_AllComplexConstructions.includes(Instruction))
       Depth++;
-    else if (Instruction == BlockEndInstr) {
+    else if (Instruction == CoGr.INSTR_END_OF_BLOCK) {
       if (Depth == 0) break;
       Depth--;
     }
-    else if (Reader.IsCodeEnd)
-      return aux.ThrowRuntimeExc_At(S, Label, "Expected end of the block.");
+    EndPos = S.TheReader.Pos - 1;
   }
-  return new WordDefinitionFragment(StartPos, Reader.Pos - BlockEndInstr.length);
+
+  if (S.TheReader.IsCodeEnd) aux.ThrowRuntimeExc(S, "Expected end of the block.");
+  S.AdditionalLocationInfo = null;
+  return new WordDefinitionFragment(StartPos, EndPos);
 }

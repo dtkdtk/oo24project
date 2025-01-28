@@ -1,6 +1,5 @@
 import "./Types.js";
 import * as libUtilsTy from "../Utils-typed.js";
-import * as __Aux from "./aAux.js";
 import DictStd from "./DictStd.js";
 import DictSyntax from "./DictSyntax.js";
 import { TK_INLINE_COMMENT_START, TK_INLINE_COMMENT_END, TK_COMMENT_LINE_START } from "./CommonGrammar.js";
@@ -13,7 +12,7 @@ import { TK_INLINE_COMMENT_START, TK_INLINE_COMMENT_END, TK_COMMENT_LINE_START }
 export class LLL_STATE {
 
   /**
-   * @type {Record<string, llval_ty>}
+   * @type {Record<string, llval_t>}
    * @readonly
    */
   ScriptMetadata = {};
@@ -27,48 +26,50 @@ export class LLL_STATE {
   ];
 
   /**
-   * @type {libUtilsTy.IStack<llval_ty>}
+   * @type {libUtilsTy.IStack<llval_t>}
    * @readonly
    */
-  Stack = new libUtilsTy.IStack();
+  Stack = libUtilsTy.IStack.create();
 
   /**
    * Стек *замыканий*: областей видимости слов(функций) и переменных.
    * @type {libUtilsTy.IStack<libUtilsTy.Labelled<Map<string, lldefinition_u>>>}
    * @readonly
    */
-  Closures = new libUtilsTy.IStack( //Замыкания по умолчанию:
+  Closures = libUtilsTy.IStack.createAndFill( //Замыкания по умолчанию:
     DictSyntax,
     DictStd,
     libUtilsTy.Labelled("<global>", new Map()),
   );
 
-  ScriptFileName = "no-file";
+  ScriptFullPath = "no-file";
 
   /**
-   * Интерпретируемое в данный момент слово.
+   * Дополнительная информация о том, где сейчас находится интерпретатор.
+   * @type {string | null}
    */
-  CurrentInterpretingWord = ""; //Ответственность - за Читателем
+  AdditionalLocationInfo = null;
 
   /**
-   * Интерпретируемая в данный момент строка (её номер).
+   * Функция для получения ввода из текущего потока ввода (`stdin`)
    */
-  CurrentInterpretingLineIndex = 0; //Ответственность - за Читателем
+  StdIN = () => undefined; //W.I.P.
 
   /**
-   * Текущий поток ввода (`stdin`)
+   * Функция для записи в текущий поток вывода (`stdout`)
    */
-  StdIN = process.stdin;
+  StdOUT = Message => console.log(Message);
 
   /**
-   * Текущий поток вывода (`stdout`)
+   * Функция для записи в текущий поток вывода ошибок (`stderr`)
    */
-  StdOUT = process.stdout;
+  StdERR = Message => console.error(Message);
 
   /**
-   * Текущий поток вывода ошибок (`stderr`)
+   * Читатель, связанный с данным состоянием LLL.
+   * @type {TheReaderStream}
    */
-  StdERR = process.stderr;
+  TheReader = libUtilsTy.__Any;
 
   /**
    * Обработчик ошибок (исключений) **на уровне платформы.**
@@ -100,14 +101,24 @@ export class TheReaderStream {
   /** @type {libUtilsTy.IStack<WordDefinitionFragment>} */
   #Bounds;
 
-  Pos = 0;
+  /** @type {libUtilsTy.IStack<number>} */
+  #Cursors = libUtilsTy.IStack.createAndFill(0);
 
-  #LineIndex = 0;
-  get LineIndex() {
-    return this.#LineIndex;
+  get Pos() {
+    return this.#Cursors.peek();
+  }
+  set Pos(X) {
+    this.#Cursors[this.#Cursors.length - 1] = X;
   }
 
-  /** @type {string} */
+  LineIndex = 0;
+
+  Column = 0;
+
+  PreviousUnit = "";
+
+  #PreviousUnitCandidate = "";
+
   #Buf = "";
 
   /** @type {string} */
@@ -157,7 +168,7 @@ export class TheReaderStream {
    */
   constructor(AllCode) {
     this.#AllCode = AllCode;
-    this.#Bounds = new libUtilsTy.IStack(new WordDefinitionFragment(0, AllCode.length - 1));
+    this.#Bounds = libUtilsTy.IStack.createAndFill(new WordDefinitionFragment(0, AllCode.length - 1));
   }
 
   /**
@@ -168,6 +179,7 @@ export class TheReaderStream {
    */
   GrabUnit() {
     this.IsFragmentEnd = false;
+    this.PreviousUnit = this.#PreviousUnitCandidate;
 
     if (this.Pos - 1 == this.#Bounds.peek().EndsAt) {
       this.ExitDefinition();
@@ -207,14 +219,20 @@ export class TheReaderStream {
    * @returns {string}
    */
   PeekUnit() {
+    const OriginalLineIndex = this.LineIndex;
+    const OriginalColumn = this.Column;
     if (this.Pos - 1 == this.#Bounds.peek().EndsAt) {
+      this.LineIndex = OriginalLineIndex;
+      this.Column = OriginalColumn;
       return this.#DrainBuffer();
     }
 
+    this.PreviousUnit = this.#PreviousUnitCandidate;
     let _LocalPos = this.Pos;
     while (!this.IsCodeEnd) {
       const Tk = this.#AllCode[_LocalPos];
       _LocalPos++;
+      this.Column++;
 
       let CurrentStatus = this.#MaybeHandle_Newline(Tk)
         || this.#MaybeHandle_CommentLine(Tk)
@@ -224,11 +242,17 @@ export class TheReaderStream {
         this.#Buf += Tk;
       
       if (_LocalPos - 1 == this.#Bounds.peek().EndsAt) {
+        this.LineIndex = OriginalLineIndex;
+        this.Column = OriginalColumn;
         return this.#DrainBuffer();
       }
 
       if (CurrentStatus == 1) continue;
-      else if (CurrentStatus == 2) return this.#DrainBuffer();
+      else if (CurrentStatus == 2) {
+        this.LineIndex = OriginalLineIndex;
+        this.Column = OriginalColumn;
+        return this.#DrainBuffer()
+      }
     }
     
     return libUtilsTy.__Any;
@@ -240,7 +264,7 @@ export class TheReaderStream {
    */
   GotoDefinition(Definition) {
     this.#Bounds.push(Definition);
-    this.Pos = Definition.StartsAt;
+    this.#Cursors.push(Definition.StartsAt);
   }
 
   /**
@@ -249,6 +273,7 @@ export class TheReaderStream {
    */
   ExitDefinition() {
     this.#Bounds.pop();
+    this.#Cursors.pop();
     this.IsFragmentEnd = true;
     if (this.#Bounds.length == 0) {
       this.IsCodeEnd = true;
@@ -261,6 +286,7 @@ export class TheReaderStream {
   #DrainBuffer() {
     const Word = this.#Buf;
     this.#Buf = "";
+    this.#PreviousUnitCandidate = Word;
     return Word;
   }
 
@@ -277,7 +303,8 @@ export class TheReaderStream {
    */
   #MaybeHandle_Newline(Tk) {
     if (Tk == "\n") {
-      this.#LineIndex++;
+      this.LineIndex++;
+      this.Column = 0; //increment'им в основном цикле
       if (this.#Buf.length > 0 && this.Options.DrainOnNewline)
         return _HandleTokenResult.DRAIN_BUF;
       return _HandleTokenResult.CONTINUE_LOOP;

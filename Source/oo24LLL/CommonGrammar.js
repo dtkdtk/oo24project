@@ -25,11 +25,42 @@ export const Prelude = {
   STRTABLE_START: "STRINGS_TABLE...",
 
   /** @readonly */
-  STRTABLE_ELEMENT_START: "STRING",
+  STRTABLE_ELEMENT_START: "^START",
 
   /** @readonly */
-  STRTABLE_ELEMENT_END: "END",
+  STRTABLE_ELEMENT_END: "^END",
   
   /** @readonly */
   STRTABLE_END: "...END_TABLE",
+};
+
+/** Языковые инструкции, ключевые слова */
+export const Instr = {
+  /** @readonly */
+  DEFINE_VAR: "DEFINE",
+
+  /** @readonly */
+  DELETE_DEFINITION: "DELETE",
+
+  /** @readonly */
+  LOOP_BREAK: "BREAK_LOOP",
+
+  /** @readonly */
+  LOOP_RESTART: "SKIP_ITERATION",
+};
+
+/** Языковые конструкции. ТРЕБУЮТ ЗАКРЫТИЕ БЛОКА - '...END' */
+export const Constrct = {
+  
+  /** @readonly */
+  DEFINE_FUNC: "DEFINE...",
+
+  /** @readonly */
+  CONDITION_THEN: "THEN...",
+
+  /** @readonly */
+  CONDITION_ELSE: "ELSE...",
+
+  /** @readonly */
+  LOOP: "LOOP...",
 };

@@ -1,5 +1,5 @@
 import * as LibUtils from "../Utils.js";
-import { MaybeReprAs_Number, ReprAs_String } from "./AuxReprConversions.js";
+import { MaybeAs_Number, As_String } from "./AuxReprConversions.js";
 const TARGET_TERMINAL_WIDTH = 60;
 
 /**
@@ -29,7 +29,7 @@ export function GetStateTrace(S) {
       Buf += "| ";
       Buf += LibUtils.CompleteToLength(MaxKeyLength, Key);
       Buf += " | ";
-      Buf += LibUtils.ClampToLength(TARGET_TERMINAL_WIDTH - MaxKeyLength, ReprAs_String(S, Value));
+      Buf += LibUtils.ClampToLength(TARGET_TERMINAL_WIDTH - MaxKeyLength, As_String(S, Value));
       Buf += "\n";
     }
   };
@@ -127,10 +127,10 @@ export function GetStateTrace(S) {
 
 /**
  * @param {LLL_STATE} S 
- * @param {llval_ty} Rtvalue 
- * @returns {llrepr_ANY_ty}
+ * @param {llval_t} Rtvalue 
+ * @returns {llval_t}
  */
 function _Represent(S, Rtvalue) {
-  return MaybeReprAs_Number(S, Rtvalue)
-    ?? ReprAs_String(S, Rtvalue);
+  return MaybeAs_Number(S, Rtvalue)
+    ?? As_String(S, Rtvalue);
 }
