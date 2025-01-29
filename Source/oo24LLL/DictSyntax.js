@@ -1,4 +1,3 @@
-import { Labelled } from "../Utils-typed.js";
 import { WordDefinitionFragment } from "./TheMachine.js";
 import * as aux from "./aAux.js";
 import * as CoGr from "./CommonGrammar.js";
@@ -9,24 +8,30 @@ const _AllComplexConstructions = Object.values(CoGr.Constrct);
  * @internal
  * Словарь СЛОВ СИНТАКСИСА.
  * 
- * @type {Labelled<Map<string, NativeJsFunction>>}
+ * @type {LLL_Dictionary}
  */
-export default Labelled("<lang>", new Map(Object.entries({
+export default new Map(Object.entries({
   [CoGr.Instr.DEFINE_VAR]: (S) => {
     aux.AssertStackLength(S, 2);
     const VarName = aux.Pop_String(S);
     const Value = S.Stack.pop();
-    S.Closures.peek().set(VarName, Value);
+    S.UserDict.set(VarName, Value);
   },
 
   [CoGr.Constrct.DEFINE_FUNC]: (S) => {
     aux.AssertStackLength(S, 1);
     const VarName = aux.Pop_String(S);
     const Bounds = InterpretCodeblock(S, VarName);
-    S.Closures.peek().set(VarName, Bounds);
+    S.UserDict.set(VarName, Bounds);
   },
 
-})));
+  [CoGr.Instr.DELETE_DEFINITION]: (S) => {
+    aux.AssertStackLength(S, 1);
+    const VarName = aux.Pop_String(S);
+    S.UserDict.delete(VarName);
+  },
+
+}));
 
 
 

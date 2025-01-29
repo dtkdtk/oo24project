@@ -3,6 +3,7 @@ export declare class IStack<T> {
   private constructor();
   static createSized<T>(size: number): IStack<T>;
   static createAndFill<T>(...items: T[]): IStack<T>;
+  static createFrom<T>(origin: IStack<T> | T[]): IStack<T>;
   static create<T>(): IStack<T>;
 
   [i: number]: T;

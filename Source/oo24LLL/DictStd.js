@@ -1,13 +1,12 @@
-import { Labelled } from "../Utils-typed.js";
 import * as aux from "./aAux.js";
 
 /**
  * @internal
  * Словарь стандартных (встроенных) функций.
  * 
- * @type {Labelled<Map<string, NativeJsFunction>>}
+ * @type {LLL_Dictionary}
  */
-export default Labelled("<std>", new Map(Object.entries({
+export default new Map(Object.entries({
 
   ////////////////////////////////////////////////////////////////////////////////////////
   
@@ -124,4 +123,4 @@ export default Labelled("<std>", new Map(Object.entries({
       S.Stack.push(From % To);
     },
   
-  })));
+}));

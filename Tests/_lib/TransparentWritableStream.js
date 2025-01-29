@@ -7,9 +7,13 @@ export class TransparentWritableStream {
 
   Output = "";
 
+  AsInjection() {
+    return (Message) => this.Stream.write(Message);
+  }
+
   constructor() {
     this.Stream = new Writable();
-    this.Stream._write = (Chunk, Encoding, Callback) => {
+    this.Stream._write = (Chunk) => {
       this.Output = Chunk;
     };
   }

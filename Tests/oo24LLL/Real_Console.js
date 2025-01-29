@@ -7,16 +7,16 @@ libTest.test("hello world + metadata", () => {
     
   const TransparentStdOUT = new TransparentWritableStream();
   const S = new LLL_STATE();
-  S.StdOUT = TransparentStdOUT.Stream;
+  S.StdOUT = TransparentStdOUT.AsInjection();
   LLL_EXECUTE(`
 META Owner: dtkdtk0
 META Version v1.0.67
 
 STRINGS_TABLE...
 
-STRING
+^START
 Hello, World!\\n
-END
+^END
 
 ...END_TABLE
 

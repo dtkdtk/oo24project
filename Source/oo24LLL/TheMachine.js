@@ -3,6 +3,7 @@ import * as libUtilsTy from "../Utils-typed.js";
 import DictStd from "./DictStd.js";
 import DictSyntax from "./DictSyntax.js";
 import { TK_INLINE_COMMENT_START, TK_INLINE_COMMENT_END, TK_COMMENT_LINE_START } from "./CommonGrammar.js";
+import { MergeDictionaries_ } from "./aAux.js";
 
 
 
@@ -12,7 +13,7 @@ import { TK_INLINE_COMMENT_START, TK_INLINE_COMMENT_END, TK_COMMENT_LINE_START }
 export class LLL_STATE {
 
   /**
-   * @type {Record<string, llval_t>}
+   * @type {Record<string, LLL_Value>}
    * @readonly
    */
   ScriptMetadata = {};
@@ -26,21 +27,37 @@ export class LLL_STATE {
   ];
 
   /**
-   * @type {libUtilsTy.IStack<llval_t>}
+   * @type {libUtilsTy.IStack<LLL_Value>}
    * @readonly
    */
   Stack = libUtilsTy.IStack.create();
 
   /**
-   * Стек *замыканий*: областей видимости слов(функций) и переменных.
-   * @type {libUtilsTy.IStack<libUtilsTy.Labelled<Map<string, lldefinition_u>>>}
+   * Имитация текущей области видимости.
+   * @type {string[]} это 'IStack' так-то, однако нам нужны методы массивов.
    * @readonly
    */
-  Closures = libUtilsTy.IStack.createAndFill( //Замыкания по умолчанию:
-    DictSyntax,
-    DictStd,
-    libUtilsTy.Labelled("<global>", new Map()),
-  );
+  VirtualScope = [];
+
+  /**
+   * Словарь **пользовательских** определений.
+   * Напоминаю, что никаких областей видимости на самом деле не существует, и структура словаря плоская.
+   * 
+   * @type {LLL_Dictionary}
+   * @readonly
+   */
+  UserDict = new Map();
+
+  /**
+   * Словарь **изначальных** определений.
+   * 
+   * Отличается тем, что определения здесь **константны**, а также не могут иметь области видимости -
+   *  т.е. все данные слова всегда интерпретируются однозначно.
+   * 
+   * @type {LLL_ConstDict}
+   * @readonly
+   */
+  PrimordialDict = MergeDictionaries_(DictSyntax, DictStd);
 
   ScriptFullPath = "no-file";
 
@@ -85,6 +102,7 @@ export class LLL_STATE {
 /**
  * Используется в функциях обработки токенов
  * @type {Readonly<Record<"NOTHING" | "CONTINUE_LOOP" | "DRAIN_BUF", 0 | 1 | 2>>}
+ * @enum {0 | 1 | 2}
  */
 const _HandleTokenResult = {
   NOTHING:        0,

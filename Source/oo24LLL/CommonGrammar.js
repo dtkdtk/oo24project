@@ -7,6 +7,9 @@ export const TK_INLINE_COMMENT_START = "(";
 /** Конец встраиваемого комментария */
 export const TK_INLINE_COMMENT_END = ")";
 
+/** Ограничитель секций областей видимости (ставится между элементами 'LLL_STATE#VirtualScope') */
+export const TK_SCOPE_SEPARATOR = "@@-";
+
 /** Конец блока определения (или замыкания) */
 export const INSTR_END_OF_BLOCK = "...END";
 

@@ -7,5 +7,7 @@ declare type IntSize = 1 | 2 | 4 | 8;
 declare type _KnownExceptionClasses = "LLL RuntimeException";
 
 
-declare type llval_t = string | number; //Доступные в данный момент типы значений
-declare type lldefinition_u = llval_t | NativeJsFunction | WordDefinitionFragment;
+declare type LLL_Value = string | number; //Доступные в данный момент типы значений
+declare type LLL_Definition = LLL_Value | NativeJsFunction | WordDefinitionFragment;
+declare type LLL_Dictionary = Map<string, LLL_Definition>;
+declare type LLL_ConstDict = ReadonlyMap<string, LLL_Definition>;

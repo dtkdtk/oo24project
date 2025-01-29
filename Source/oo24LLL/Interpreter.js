@@ -2,6 +2,7 @@ import { LLL_STATE, TheReaderStream, WordDefinitionFragment } from "./TheMachine
 import { RemoveSuffix } from "../Utils.js";
 import * as aux from "./aAux.js";
 import * as CoGr from "./CommonGrammar.js";
+import * as libUtilsTy from "../Utils-typed.js";
 
 
 
@@ -93,15 +94,15 @@ function InterpretStringsTable(S) {
       S.TheReader.Options.HandleCommentLines = false;
       readingString: while (!S.TheReader.IsCodeEnd) {
         const Line = S.TheReader.GrabUnit();
-        if (Line == "END") {
-          Content = HandleCharacterEscaping(S, Content);
+        if (Line == CoGr.Prelude.STRTABLE_ELEMENT_END) {
+          Content = aux.HandleCharacterEscaping(S, Content);
           S.StringsTable.push(Content);
           continue interpreting;
         }
-        if (Line == "\\END") {
+        if (Line == "\\" + CoGr.Prelude.STRTABLE_ELEMENT_END) {
           if (Content.length > 0)
             Content += "\n"
-          Content += "END";
+          Content += CoGr.Prelude.STRTABLE_ELEMENT_END;
           continue readingString;
         }
         if (Content.length > 0)
@@ -133,114 +134,69 @@ function InterpretStringsTable(S) {
 function InterpretMainCode(S) {
   S.AdditionalLocationInfo = null;
   interpreting: while (!S.TheReader.IsCodeEnd) {
-    const Tk = S.TheReader.GrabUnit();
-    if (Tk.length > 1 && Tk.startsWith('"') && Tk.endsWith('"')) {
-      const Handled = _Unquote(Tk);
+    const Word = S.TheReader.GrabUnit();
+    if (Word.length > 1 && Word.startsWith('"') && Word.endsWith('"')) {
+      const Handled = aux.Unquote_(Word);
       S.Stack.push(Handled); //не ищем определение
       continue interpreting;
     }
-    const MaybeAsNumber = aux.MaybeAs_Number(S, Tk);
+    const MaybeAsNumber = aux.MaybeAs_Number(S, Word);
     if (MaybeAsNumber !== null) {
       S.Stack.push(MaybeAsNumber);
       continue interpreting;
     }
-    findingDefinition: for (let i = S.Closures.length - 1; i >= 0; i--) {
-      const TheClosure = S.Closures[i];
-      const Definition = TheClosure.get(Tk);
+    
+    const Definition = _SearchForDefinition(S, Word);
 
-      switch (typeof Definition) {
-        case "undefined": //не нашли, ищем дальше
-          continue findingDefinition;
+    switch (typeof Definition) {
+      case "undefined": //не нашли, ищем дальше
+        //не нашли определение ни в одном "замыкании"
+        aux.ThrowRuntimeExc(S, `Undefined word: '${Word}'`);
 
-        case "number": //это числовое значение => уверенно кидаем в стек
-        case "string": //нашли строку / НЕленивое значение
-          S.Stack.push(Definition);
+      case "number": //это числовое значение => уверенно кидаем в стек
+      case "string": //нашли строку / НЕленивое значение
+        S.Stack.push(Definition);
+        continue interpreting;
+
+      case "function": //нашли, нативный JS
+        Definition(S);
+        continue interpreting;
+
+      case "object":
+        if (Definition instanceof WordDefinitionFragment) {
+          S.VirtualScope.push(Word);
+          S.TheReader.GotoDefinition(Definition);
+          S.VirtualScope.pop();
           continue interpreting;
+        }
+        else continue;
 
-        case "function": //нашли, нативный JS
-          Definition(S);
-          continue interpreting;
-
-        case "object":
-          if (Definition instanceof WordDefinitionFragment) {
-            S.TheReader.GotoDefinition(Definition);
-            continue interpreting;
-          }
-          else continue;
-
-        default:
-          aux.ThrowRuntimeExc(S, `[internal] Unsupported JavaScript-runtime definition type: '${typeof Definition}'`);
-      }
-    }
-    //не нашли определение ни в одном замыкании
-    S.Stack.push(Tk);
-  }
-}
-
-
-
-/**
- * Обрабатывает экранирвоание символов (а также спец.символы вроде '\n').
- * 
- * В данный момент поддерживаются следующие спец.символы:
- * - `\r` (возврат каретки; для совместимости с форматом конца строки "CRLF")
- * - `\n` (переход на новую строку)
- * - `\t` (символ табуляции)
- * - `\\` (обратный слеш)
- * - `\<перевод_строки>` (отменяет перевод строки)
- * @param {LLL_STATE} S 
- * @param {string} AllCode 
- * @returns {string} обработанная строка
- * @since `v0.0.3`
- */
-function HandleCharacterEscaping(S, AllCode) {
-  let NewCode = "";
-  let PreviousIndex = 0;
-  theLoop: while (true) {
-    const MatchIndex = AllCode.indexOf("\\", PreviousIndex + 2);
-    if (MatchIndex == -1) break;
-    if (MatchIndex + 1 == AllCode.length)
-      aux.ThrowRuntimeExc(S, `Expected escape character, got end of string`);
-    NewCode += AllCode.slice(PreviousIndex, MatchIndex);
-    PreviousIndex = MatchIndex;
-    switch (AllCode[MatchIndex + 1]) {
-      case "r":
-        NewCode += "\r";
-        continue theLoop;
-      case "n":
-        NewCode += "\n";
-        continue theLoop;
-      case "t":
-        NewCode += "\t";
-        continue theLoop;
-      case "0":
-        NewCode += "\0";
-        continue theLoop;
-      case "\\":
-        NewCode += "\\";
-        continue theLoop;
-      case "\n":
-        continue theLoop;
-      case "\r":
-        if (AllCode[MatchIndex + 2] == "\n")
-        AllCode = AllCode.slice(MatchIndex + 3);
-        continue theLoop;
       default:
-        aux.ThrowRuntimeExc(S, `Non-existent special character: '\\${AllCode[MatchIndex + 1]}'`);
+        aux.ThrowRuntimeExc(S, `[internal] Unsupported JavaScript-runtime definition type: '${typeof Definition}'`);
     }
   }
-  NewCode += AllCode.slice(PreviousIndex, AllCode.length);
-  return NewCode;
 }
 
 
 
 /**
- * Убирает кавычки с начала и с конца строки.
- * @param {string} Target 
- * @returns {string}
+ * Ищет определение слова в пользовательском и изначальном словарях.
+ * Учитывает области видимости.
+ * @param {LLL_STATE} S 
+ * @param {string} Word
+ * @returns {LLL_Definition | undefined}
  */
-function _Unquote(Target) {
-  if (Target.length <= 2) return "";
-  return Target.slice(1, Target.length - 1);
+function _SearchForDefinition(S, Word) {
+  //TODO: Оптимизировать. Можно сделать сначала полную строку, а потом "снимать слои" с неё.
+  const MaybePrimordialDefinition = S.PrimordialDict.get(Word);
+  if (MaybePrimordialDefinition) return MaybePrimordialDefinition;
+  const CurrentScope = [...S.VirtualScope];
+  while (CurrentScope.length > 0) {
+    const FullScope = CurrentScope.join(CoGr.TK_SCOPE_SEPARATOR);
+    const FullWord = FullScope + CoGr.TK_SCOPE_SEPARATOR + Word;
+    const MaybeDefinition = S.UserDict.get(FullWord);
+    if (MaybeDefinition !== undefined) return MaybeDefinition;
+    CurrentScope.pop();
+  }
+  return S.UserDict.get(Word);
 }

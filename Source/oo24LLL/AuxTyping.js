@@ -5,7 +5,7 @@ import * as aux from "./aAux.js";
  * Если не получается - возвращает `null` вместо ошибки.
  * 
  * @param {LLL_STATE} S 
- * @param {llval_t} Value 
+ * @param {LLL_Value} Value 
  * @returns {number | null}
  */
 export function MaybeAs_Number(S, Value) {
@@ -24,7 +24,7 @@ export function MaybeAs_Number(S, Value) {
  * Конвертирует runtime-значение в число (тип `Integer|Float`).
  * 
  * @param {LLL_STATE} S
- * @param {llval_t} Rtvalue
+ * @param {LLL_Value} Rtvalue
  * @returns {number | never}
  */
 export function As_Number(S, Rtvalue) {
@@ -38,7 +38,7 @@ export function As_Number(S, Rtvalue) {
  * Конвертирует runtime-значение в UTF-8 строку (тип `String`).
  * 
  * @param {LLL_STATE} S
- * @param {llval_t} Rtvalue
+ * @param {LLL_Value} Rtvalue
  * @returns {string}
  */
 export function As_String(S, Rtvalue) {
