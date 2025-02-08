@@ -4,7 +4,7 @@ import * as aux from "./aAux.js";
  * @internal
  * Словарь стандартных (встроенных) функций.
  * 
- * @type {LLL_Dictionary}
+ * @type {Dictionary}
  */
 export default new Map(Object.entries({
 
@@ -54,10 +54,12 @@ export default new Map(Object.entries({
     string: (S) => {
       aux.AssertStackLength(S, 1);
       const StrIndex = aux.Pop_Number(S);
-      aux.Assert(S, StrIndex >= 0 && StrIndex <= S.StringsTable.length, `String with index '${StrIndex}' not found.`);
+      aux.Assert(S, StrIndex >= 0 && StrIndex <= S.StringsTable.length,
+        "LLL RuntimeError", "ERT_1004", StrIndex);
   
       const StringFromTable = S.StringsTable[StrIndex];
-      aux.Assert(S, StringFromTable !== undefined, `String not found.`);
+      aux.Assert(S, StringFromTable !== undefined,
+        "LLL RuntimeError", "ERT_1004", StrIndex);
   
       S.Stack.push(StringFromTable);
     },

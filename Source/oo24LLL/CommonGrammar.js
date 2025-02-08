@@ -1,5 +1,19 @@
-/** Начало строчного комментария */
-export const TK_COMMENT_LINE_START = ";";
+/** Начало строчного комментария (вариант A) */
+export const TK_COMMENT_LINE_START_A = ";";
+
+/** Начало строчного комментария (вариант B) */
+export const TK_COMMENT_LINE_START_B = "#";
+
+/**
+ * Начало/конец номинальной строки (той, что просто ссылается на слово,
+ * и может быть изменена при компиляции).
+ */
+export const TK_NOMINAL_STRING = '`';
+
+/**
+ * Начало/конец виртуальной строки (важна в рантайме, мутировать при компиляции нельзя).
+ */
+export const TK_VIRTUAL_STRING = '"';
 
 /** Начало встраиваемого комментария */
 export const TK_INLINE_COMMENT_START = "(";
@@ -50,6 +64,15 @@ export const Instr = {
 
   /** @readonly */
   LOOP_RESTART: "SKIP_ITERATION",
+
+  /** @readonly */
+  EnterScope: MakeIntrinsic("EnterScope"),
+
+  /** @readonly */
+  ExitScope: MakeIntrinsic("ExitScope"),
+
+  /** @readonly */
+  ExecuteCondition: MakeIntrinsic("ExecuteCondition"),
 };
 
 /** Языковые конструкции. ТРЕБУЮТ ЗАКРЫТИЕ БЛОКА - '...END' */
@@ -67,3 +90,11 @@ export const Constrct = {
   /** @readonly */
   LOOP: "LOOP...",
 };
+
+/**
+ * Добавляет типичный intrinsic-префикс символу.
+ * @param {string} Sym
+ */
+export function MakeIntrinsic(Sym) {
+  return "@__" + Sym + "__@";
+}

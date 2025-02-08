@@ -30,7 +30,7 @@ export function MaybeAs_Number(S, Value) {
 export function As_Number(S, Rtvalue) {
   const AsNumber = MaybeAs_Number(S, Rtvalue);
   if (AsNumber === null)
-    aux.ThrowRuntimeExc(S, `The given value cannot be converted to Integer/Float.`);;
+    aux.ThrowRuntimeException(S, "XM_1003", Rtvalue);
   return AsNumber;
 }
 

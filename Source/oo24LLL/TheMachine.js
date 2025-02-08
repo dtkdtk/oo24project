@@ -1,8 +1,8 @@
 import "./Types.js";
 import * as libUtilsTy from "../Utils-typed.js";
+import * as CoGr from "./CommonGrammar.js";
 import DictStd from "./DictStd.js";
 import DictSyntax from "./DictSyntax.js";
-import { TK_INLINE_COMMENT_START, TK_INLINE_COMMENT_END, TK_COMMENT_LINE_START } from "./CommonGrammar.js";
 import { MergeDictionaries_ } from "./aAux.js";
 
 
@@ -37,13 +37,13 @@ export class LLL_STATE {
    * @type {string[]} это 'IStack' так-то, однако нам нужны методы массивов.
    * @readonly
    */
-  VirtualScope = [];
+  PseudoScope = [];
 
   /**
    * Словарь **пользовательских** определений.
    * Напоминаю, что никаких областей видимости на самом деле не существует, и структура словаря плоская.
    * 
-   * @type {LLL_Dictionary}
+   * @type {Dictionary}
    * @readonly
    */
   UserDict = new Map();
@@ -54,10 +54,26 @@ export class LLL_STATE {
    * Отличается тем, что определения здесь **константны**, а также не могут иметь области видимости -
    *  т.е. все данные слова всегда интерпретируются однозначно.
    * 
-   * @type {LLL_ConstDict}
+   * @type {ConstDict}
    * @readonly
    */
   PrimordialDict = MergeDictionaries_(DictSyntax, DictStd);
+
+  /**
+   * Хранилище дополнительных состояний интерпретатора.
+   * @readonly
+   */
+  StateStorage = {
+    /** Свободный номер для анонимных областей видимости. */
+    _CurrentSymbolIndex: 1,
+
+    /**
+     * (Используется для синтаксических конструкций)
+     * Блок кода определения, идущий после данной инструкции.
+     * @type {CodeFragment | null}
+     */
+    PostBlock: null,
+  };
 
   ScriptFullPath = "no-file";
 
@@ -84,13 +100,13 @@ export class LLL_STATE {
 
   /**
    * Читатель, связанный с данным состоянием LLL.
-   * @type {TheReaderStream}
+   * @type {TheReader}
    */
   TheReader = libUtilsTy.__Any;
 
   /**
    * Обработчик ошибок (исключений) **на уровне платформы.**
-   * @type {(ExcClass: _KnownExceptionClasses) => never}
+   * @type {(ExcClass: KnownExceptionClass) => never}
    */
   _ExceptionHandler = (ExcClass) => {
     throw ExcClass;
@@ -101,45 +117,41 @@ export class LLL_STATE {
 
 /**
  * Используется в функциях обработки токенов
- * @type {Readonly<Record<"NOTHING" | "CONTINUE_LOOP" | "DRAIN_BUF", 0 | 1 | 2>>}
- * @enum {0 | 1 | 2}
+ * @type {Readonly<Record<"CONTINUE" | "JUST_TOKEN" | "SKIP_TOKEN" | "DRAIN_BUF", number>>}
+ * @enum {number}
  */
 const _HandleTokenResult = {
-  NOTHING:        0,
-  CONTINUE_LOOP:  1,
-  DRAIN_BUF:      2,
+  CONTINUE:     0, //в этом звене цепочки ничего не нашли; продолжаем цепочку проверок
+  JUST_TOKEN:   1, //просто добавляем в буфер; прерываем цепочку проверок
+  SKIP_TOKEN:   1 << 1, //пропускаем токен
+  DRAIN_BUF:    1 << 2, //в буфер НЕ добавляем: возвращаем значение буфера из 'GrabUnit'
 };
 
 /**
  * Читатель кода.
- * Специализирован под LLL.
+ * Специализирован под LLL (подверает код начальной обработке).
  */
-export class TheReaderStream {
+export class TheReader {
 
-  /** @type {libUtilsTy.IStack<WordDefinitionFragment>} */
-  #Bounds;
+  Pos = 0;
+  EndsAt;
 
-  /** @type {libUtilsTy.IStack<number>} */
-  #Cursors = libUtilsTy.IStack.createAndFill(0);
+  LineIndex = 1;
+  Column = 1;
 
-  get Pos() {
-    return this.#Cursors.peek();
-  }
-  set Pos(X) {
-    this.#Cursors[this.#Cursors.length - 1] = X;
-  }
-
-  LineIndex = 0;
-
-  Column = 0;
-
-  PreviousUnit = "";
-
+  PreviousUnit = ""; //для instant-lookbehind инструкций (FUTURE)
   #PreviousUnitCandidate = "";
 
-  #Buf = "";
+  PreviousPos = 0;
+  #PreviousPosCandidate = 0;
 
-  /** @type {string} */
+  PreviousLineIndex = 1;
+  #PreviousLineIndexCandidate = 1;
+
+  PreviousColumn = 1;
+  #PreviousColumnCandidate = 1;
+
+  #Buf = "";
   #AllCode;
 
   get __AllCode() { return this.#AllCode; }
@@ -151,6 +163,12 @@ export class TheReaderStream {
 
     /** Режим интерпретации ВСТРОЕННОГО комментария? */
     InlineComment: false,
+
+    /** Режим интерпретации НОМИНАЛЬНОЙ строки? ``(` обратная кавычка)`` */
+    NominalString: false,
+
+    /** Режим интерпретации ВИРТУАЛЬНОЙ строки? `(" двойная кавычка)` */
+    VirtualString: false,
   };
 
   /** Мы достигли конца кода? */
@@ -186,116 +204,64 @@ export class TheReaderStream {
    */
   constructor(AllCode) {
     this.#AllCode = AllCode;
-    this.#Bounds = libUtilsTy.IStack.createAndFill(new WordDefinitionFragment(0, AllCode.length - 1));
+    this.EndsAt = AllCode.length - 1;
   }
 
   /**
    * *Извлекает из потока кода* текущую единицу кода (слово, строку и т.д.)
    * 
-   * Проверка конца кода ({@link IsCodeEnd}) на вашей совести!
+   * Если внезапно Читатель достиг конца кода - данная функция вернёт некорректное значение.
+   * Проверка конца кода ({@link IsCodeEnd}) перед дальнейшей обработкой единицы кода -
+   *  на вашей совести!
    * @returns {string}
    */
   GrabUnit() {
     this.IsFragmentEnd = false;
     this.PreviousUnit = this.#PreviousUnitCandidate;
+    this.PreviousPos = this.#PreviousPosCandidate;
+    this.PreviousColumn = this.#PreviousColumnCandidate;
+    this.PreviousLineIndex = this.#PreviousLineIndexCandidate;
 
-    if (this.Pos - 1 == this.#Bounds.peek().EndsAt) {
-      this.ExitDefinition();
-      return this.#DrainBuffer();
+    if (this.Pos - 1 == this.EndsAt) {
+      this.IsCodeEnd = true;
+      return libUtilsTy.__Any;
     }
 
-    while (!this.IsCodeEnd) {
+    while (true) {
       const Tk = this.#AllCode[this.Pos];
       this.Pos++;
 
       let CurrentStatus = this.#MaybeHandle_Newline(Tk)
+        || this.#MaybeHandle_String(Tk)
         || this.#MaybeHandle_CommentLine(Tk)
         || this.#MaybeHandle_InlineComment(Tk)
         || this.#MaybeHandle_InterpretingUnitBound(Tk);
-      if (CurrentStatus == 0)
-        this.#Buf += Tk;
+      if (CurrentStatus == _HandleTokenResult.CONTINUE
+        || CurrentStatus & _HandleTokenResult.JUST_TOKEN
+      ) this.#Buf += Tk; //нет спец.значения => просто токен, добавить в буфер
       
-      if (this.Pos - 1 == this.#Bounds.peek().EndsAt) {
-        this.ExitDefinition();
-        return this.#DrainBuffer();
+      if (this.Pos - 1 == this.EndsAt) {
+        if (this.#Buf.length > 0)
+          return this.#DrainBuffer();
+        this.IsCodeEnd = true;
+        return libUtilsTy.__Any;
       }
 
-      if (CurrentStatus == 1) continue;
-      else if (CurrentStatus == 2) return this.#DrainBuffer();
+      if (CurrentStatus & _HandleTokenResult.SKIP_TOKEN) continue;
+      else if (CurrentStatus & _HandleTokenResult.DRAIN_BUF) return this.#DrainBuffer();
     }
-    
-    return libUtilsTy.__Any;
   }
 
-
   /**
-   * *Просматривает, не извлекая* текущую единицу кода (слово, строку и т.д.)
+   * Возвращается курсор Читателя к предыдущей единице кода.
    * 
-   * (Не модифицирует "глобальное" состояние Читателя)
-   * 
-   * Проверка конца кода ({@link IsCodeEnd}) на вашей совести!
-   * @returns {string}
+   * Размер истории - `1`. Это значит, что можно прыгнуть только 1 раз подряд
+   *  (т.е. более поздняя история не сохранилась)
    */
-  PeekUnit() {
-    const OriginalLineIndex = this.LineIndex;
-    const OriginalColumn = this.Column;
-    if (this.Pos - 1 == this.#Bounds.peek().EndsAt) {
-      this.LineIndex = OriginalLineIndex;
-      this.Column = OriginalColumn;
-      return this.#DrainBuffer();
-    }
-
-    this.PreviousUnit = this.#PreviousUnitCandidate;
-    let _LocalPos = this.Pos;
-    while (!this.IsCodeEnd) {
-      const Tk = this.#AllCode[_LocalPos];
-      _LocalPos++;
-      this.Column++;
-
-      let CurrentStatus = this.#MaybeHandle_Newline(Tk)
-        || this.#MaybeHandle_CommentLine(Tk)
-        || this.#MaybeHandle_InlineComment(Tk)
-        || this.#MaybeHandle_InterpretingUnitBound(Tk);
-      if (CurrentStatus == 0)
-        this.#Buf += Tk;
-      
-      if (_LocalPos - 1 == this.#Bounds.peek().EndsAt) {
-        this.LineIndex = OriginalLineIndex;
-        this.Column = OriginalColumn;
-        return this.#DrainBuffer();
-      }
-
-      if (CurrentStatus == 1) continue;
-      else if (CurrentStatus == 2) {
-        this.LineIndex = OriginalLineIndex;
-        this.Column = OriginalColumn;
-        return this.#DrainBuffer()
-      }
-    }
-    
-    return libUtilsTy.__Any;
-  }
-
-  /**
-   * Осуществляет "переход" к интерпретации определения (некого фрагмента кода)
-   * @param {WordDefinitionFragment} Definition
-   */
-  GotoDefinition(Definition) {
-    this.#Bounds.push(Definition);
-    this.#Cursors.push(Definition.StartsAt);
-  }
-
-  /**
-   * Антоним {@link GotoDefinition()} - осуществляет ОБРАТНЫЙ переход,
-   * "выход" из интерпретации определения.
-   */
-  ExitDefinition() {
-    this.#Bounds.pop();
-    this.#Cursors.pop();
-    this.IsFragmentEnd = true;
-    if (this.#Bounds.length == 0) {
-      this.IsCodeEnd = true;
-    }
+  JumpBack() {
+    this.Pos = this.PreviousPos;
+    this.Column = this.PreviousColumn;
+    this.LineIndex = this.PreviousLineIndex;
   }
 
   /**
@@ -305,19 +271,21 @@ export class TheReaderStream {
     const Word = this.#Buf;
     this.#Buf = "";
     this.#PreviousUnitCandidate = Word;
+    this.#PreviousPosCandidate = this.Pos;
     return Word;
   }
 
   /* Обратите внимание: методы '#MaybeHandle_*' не должны мутировать
-  "глобальное" состояние Читателя (поля '#Bounds', 'Pos', '#AllCode').
+  |  "глобальное" состояние Читателя (поля '#Bounds', 'Pos', '#AllCode').
   Исключение - внутреннее состояние ('#InternalState') и '#LineIndex' (в методе '#MaybeHandle_Newline').
-  Кроме этого, данные функции не должны читать код самостоятельно (могут получать лишь один прочитанный символ,
-  + иметь доступ к буферу '#Buf') или мутировать "глобальное" состояние Читателя. */
+  Кроме этого, данные функции не должны читать код самостоятельно (могут получать лишь
+  |  один прочитанный символ, + иметь доступ к буферу '#Buf')
+  |  или мутировать "глобальное" состояние Читателя. */
 
   /**
    * Часть {@link GrabUnit()}, отвечающая за обработку переходов на новую строку.
    * @param {string} Tk 
-   * @returns {0 | 1 | 2} `0` - ничего не найдено, идём дальше; `1` - обработано, начинаем новый цикл; `2` - делаем возврат из {@link GrabUnit()} (возвращаем буфер)
+   * @returns {number}
    */
   #MaybeHandle_Newline(Tk) {
     if (Tk == "\n") {
@@ -325,82 +293,139 @@ export class TheReaderStream {
       this.Column = 0; //increment'им в основном цикле
       if (this.#Buf.length > 0 && this.Options.DrainOnNewline)
         return _HandleTokenResult.DRAIN_BUF;
-      return _HandleTokenResult.CONTINUE_LOOP;
+      return _HandleTokenResult.SKIP_TOKEN;
     }
     if (Tk == "\r")
-      return _HandleTokenResult.CONTINUE_LOOP;
-    return _HandleTokenResult.NOTHING;
+      return _HandleTokenResult.SKIP_TOKEN;
+    return _HandleTokenResult.CONTINUE;
   }
 
+  /**
+   * Часть {@link GrabUnit()}, отвечающая за обработку строк.
+   * @param {string} Tk 
+   * @returns {number}
+   */
+  #MaybeHandle_String(Tk) {
+    if (Tk == CoGr.TK_NOMINAL_STRING) {
+      if (this.#InternalState.NominalString) {
+        this.#InternalState.NominalString = false;
+        return _HandleTokenResult.JUST_TOKEN | _HandleTokenResult.DRAIN_BUF;
+      }
+      else {
+        this.#InternalState.NominalString = true;
+        return _HandleTokenResult.JUST_TOKEN; //у нас, строки должны содержать кавычки
+      }
+    }
+    else if (Tk == CoGr.TK_VIRTUAL_STRING) {
+      if (this.#InternalState.VirtualString) {
+        this.#InternalState.VirtualString = false;
+        return _HandleTokenResult.JUST_TOKEN | _HandleTokenResult.DRAIN_BUF;
+      }
+      else {
+        this.#InternalState.VirtualString = true;
+        return _HandleTokenResult.JUST_TOKEN; //у нас, строки должны содержать кавычки
+      }
+    }
+    if (this.#InternalState.NominalString || this.#InternalState.VirtualString)
+      return _HandleTokenResult.JUST_TOKEN;
+    else
+      return _HandleTokenResult.CONTINUE;
+  }
+
+  /**
+   * Часть {@link GrabUnit()}, отвечающая за обработку строчных комментариев.
+   * @param {string} Tk 
+   * @returns {number}
+   */
   #MaybeHandle_CommentLine(Tk) {
     if (!this.Options.HandleCommentLines)
-      return _HandleTokenResult.NOTHING;
+      return _HandleTokenResult.CONTINUE;
 
-    if (Tk == TK_COMMENT_LINE_START) { //начало коммента
+    if (!this.#InternalState.InlineComment && Tk == CoGr.TK_COMMENT_LINE_START_A || Tk == CoGr.TK_COMMENT_LINE_START_B) { //начало коммента
       this.#InternalState.CommentLine = true;
-      return _HandleTokenResult.CONTINUE_LOOP;
+      return _HandleTokenResult.SKIP_TOKEN;
     }
     if (Tk == "\n") { //конец коммента
       this.#InternalState.CommentLine = false;
       if (this.#Buf.length > 0 && this.Options.DrainOnNewline)
         return _HandleTokenResult.DRAIN_BUF; //начало строчного комментария = переход на новую строку.
-      return _HandleTokenResult.CONTINUE_LOOP;
+      return _HandleTokenResult.SKIP_TOKEN;
     }
     if (this.#InternalState.CommentLine)
-      return _HandleTokenResult.CONTINUE_LOOP;
-    return _HandleTokenResult.NOTHING;
+      return _HandleTokenResult.SKIP_TOKEN;
+    return _HandleTokenResult.CONTINUE;
   }
 
+  /**
+   * Часть {@link GrabUnit()}, отвечающая за обработку встраиваемых комментариев.
+   * @param {string} Tk 
+   * @returns {number}
+   */
   #MaybeHandle_InlineComment(Tk) {
     if (!this.Options.HandleInlineComments)
-      return _HandleTokenResult.NOTHING;
+      return _HandleTokenResult.CONTINUE;
 
-    if (Tk == TK_INLINE_COMMENT_START) { //начало коммента
+    if (Tk == CoGr.TK_INLINE_COMMENT_START) { //начало коммента
       this.#InternalState.InlineComment = true;
-      return _HandleTokenResult.CONTINUE_LOOP;
+      return _HandleTokenResult.SKIP_TOKEN;
     }
-    if (this.#InternalState.InlineComment && Tk == TK_INLINE_COMMENT_END) { //конец коммента
+    if (this.#InternalState.InlineComment && Tk == CoGr.TK_INLINE_COMMENT_END) { //конец коммента
       this.#InternalState.InlineComment = false;
-      return _HandleTokenResult.CONTINUE_LOOP;
+      return _HandleTokenResult.SKIP_TOKEN;
     }
     if (this.#InternalState.InlineComment)
-      return _HandleTokenResult.CONTINUE_LOOP;
-    return _HandleTokenResult.NOTHING;
+      return _HandleTokenResult.SKIP_TOKEN;
+    return _HandleTokenResult.CONTINUE;
   }
 
   /**
    * Граница интересующей нас единицы кода: пробела, перехода на новую строку и т.д.
+   * @param {string} Tk 
+   * @returns {number}
    */
   #MaybeHandle_InterpretingUnitBound(Tk) {
     if (Tk == this.Options.UnitBound) {
       if (this.#Buf.length > 0 || !this.Options.SkipEmptyUnits)
         return _HandleTokenResult.DRAIN_BUF;
-      return _HandleTokenResult.CONTINUE_LOOP;
+      return _HandleTokenResult.SKIP_TOKEN;
     }
-    return _HandleTokenResult.NOTHING;
+    return _HandleTokenResult.CONTINUE;
   }
 }
 
 
 
-/**
- * Координаты (индексы) начала и конца фрагмента кода,
- * являющимся определением некого слова.
- */
-export class WordDefinitionFragment {
+export class CodeFragment {
+  /** @type {(string | CodeFragment)[]} */
+  Words;
 
-  /** @type {number} */
-  StartsAt;
-
-  /** @type {number} */
-  EndsAt;
+  /** @type {string} */
+  Label;
 
   /**
-   * @param {number} StartIndex 
-   * @param {number} EndIndex 
+   * (НЕ РЕКУРСИВНО) Превращает текущее определение в самый обычный массив слов,
+   *  сохраняя (псевдо-) области видимости.
+   * @mutates
    */
-  constructor(StartIndex, EndIndex) {
-    this.StartsAt = StartIndex;
-    this.EndsAt = EndIndex;
+  MakeFlat() {
+    for (let i = 0; i < this.Words.length; i++) {
+      const W = this.Words[i];
+      if (typeof W == "object")
+      this.Words.splice(i, 1, ...[
+        this.Label,
+        CoGr.Instr.EnterScope,
+        ...W.Words,
+        CoGr.Instr.ExitScope,
+      ]);
+    }
+  }
+
+  /**
+   * @param {(string | CodeFragment)[]} Words 
+   * @param {string} Label 
+   */
+  constructor(Words, Label) {
+    this.Words = Words;
+    this.Label = Label;
   }
 }

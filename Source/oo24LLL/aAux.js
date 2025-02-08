@@ -1,41 +1,115 @@
 import { GetStateTrace } from "./AuxStateTrace.js";
+import { Errors } from "./Errors.js";
 
 export * from "./AuxStateTrace.js";
 export * from "./AuxTyping.js";
 
 /* Суффикс '_' у имён функций означает, что они не принимают параметр 'S: LLL_STATE'
- - т.е. являются "абстрактными", не зависящами от контекста. */
+|  - т.е. являются "абстрактными", не зависящами от контекста. */
 
 
 
 /**
- * Выбрасывает RuntimeException.
+ * @template {KnownExceptionCode} _ECodeTy
+ * @param {LLL_STATE} S 
+ * @param {_ECodeTy} ECode 
+ * @param {Parameters<(typeof Errors)[_ECodeTy]>} Args 
+ * @returns {never}
+ */
+export function ThrowRuntimeException(S, ECode, ...Args) {
+  /** @type {(...args: any[]) => string} */
+  const Fn = Errors[ECode];
+  _ThrowException(S, "LLL RuntimeException", ECode, Fn(...Args));
+}
+
+/**
+ * @template {KnownExceptionCode} _ECodeTy
+ * @param {LLL_STATE} S 
+ * @param {_ECodeTy} ECode 
+ * @param {Parameters<(typeof Errors)[_ECodeTy]>} Args 
+ * @returns {never}
+ */
+export function ThrowRuntimeError(S, ECode, ...Args) {
+  /** @type {(...args: any[]) => string} */
+  const Fn = Errors[ECode];
+  _ThrowException(S, "LLL RuntimeError", ECode, Fn(...Args));
+}
+
+/**
+ * @template {KnownExceptionCode} _ECodeTy
+ * @param {LLL_STATE} S 
+ * @param {_ECodeTy} ECode 
+ * @param {Parameters<(typeof Errors)[_ECodeTy]>} Args 
+ * @returns {never}
+ */
+export function ThrowSyntaxError(S, ECode, ...Args) {
+  /** @type {(...args: any[]) => string} */
+  const Fn = Errors[ECode];
+  _ThrowException(S, "LLL SyntaxError", ECode, Fn(...Args));
+}
+
+/**
+ * Отправляет предупреждение в `stderr`.
+ * @template {KnownExceptionCode} _ECodeTy
+ * @param {LLL_STATE} S 
+ * @param {_ECodeTy} ECode 
+ * @param {Parameters<(typeof Errors)[_ECodeTy]>} Args 
+ */
+export function EmitWarning(S, ECode, ...Args) {
+  /** @type {(...args: any[]) => string} */
+  const Fn = Errors[ECode];
+  const Msg = Fn(...Args);
+  S.StdERR(`LLL Warning: ${Msg}` + _GetErrAppendix(S) + `\t\nErrCode: [${ECode}]` + "\n");
+}
+
+/**
  * @param {LLL_STATE} S
+ * @param {KnownExceptionClass} EClass
+ * @param {KnownExceptionCode} ECode 
  * @param {string} Msg
  * @returns {never}
  */
-export function ThrowRuntimeExc(S, Msg) {
+function _ThrowException(S, EClass, ECode, Msg) {
   /* Обратите внимание: Здесь мы не имеем права пользоваться
-   всякими 'throw' / 'process.exit()' - используем вместо этого
-   'LLL_STATE#_ErrorHandler()'.
+  |  всякими 'throw' / 'process.exit()' - используем вместо этого
+  |  'LLL_STATE#_ErrorHandler()'.
   А ещё, вместо 'console.*' используем 'LLL_STATE#Std(OUT/ERR)'. */
-  S.StdERR(`LLL Runtime exception: ${Msg}\n\tScript path: '${S.ScriptFullPath}'\n\tLine: ${S.TheReader.LineIndex}\n\tColumn: ${S.TheReader.Column}${S.AdditionalLocationInfo ? "\n\tAddit.Location: " + S.AdditionalLocationInfo : ''}\n\n`);
+  S.StdERR(`${EClass}: ${Msg}` + _GetErrAppendix(S) + `\t\nErrCode: [${ECode}]` + "\n");
   S.StdERR(GetStateTrace(S));
   S.StdERR("\n\n");
-  S._ExceptionHandler("LLL RuntimeException");
+  S._ExceptionHandler(EClass);
+}
+
+/**
+ * Возвращает аппендикс ошибки. В нём содержится информация об ошибке (скрипт, строка, столбец и т.д.)
+ * @param {LLL_STATE} S 
+ * @returns {string}
+ */
+function _GetErrAppendix(S) {
+  return `\n\tScript path: '${S.ScriptFullPath}'`
+    + `\n\tLine: ${S.TheReader.LineIndex}`
+    + `\n\tColumn: ${S.TheReader.Column}`
+    + (S.AdditionalLocationInfo ? "\n\tAddit.Location: " + S.AdditionalLocationInfo : '')
+    + `\n`;
 }
 
 
 
 /**
+ * Проверяет условие. Если ложно - выкидывает указанное исключение / ошибку.
+ * @template {KnownExceptionCode} _ECodeTy
  * @param {LLL_STATE} S
  * @param {unknown} Condition 
- * @param {string} ErrorMsg 
- * @returns {asserts Condition is true}
+ * @param {KnownExceptionClass} EClass
+ * @param {_ECodeTy} ECode 
+ * @param {Parameters<(typeof Errors)[_ECodeTy]>} Args 
+ * @returns {asserts Condition}
  */
-export function Assert(S, Condition, ErrorMsg) {
-  if (!Condition)
-  ThrowRuntimeExc(S, ErrorMsg);
+export function Assert(S, Condition, EClass, ECode, ...Args) {
+  if (Condition) return;
+  /** @type {(...args: any[]) => string} */
+  const Fn = Errors[ECode];
+  _ThrowException(S, EClass, ECode, Fn(...Args));
 }
 
 
@@ -48,8 +122,7 @@ export function Assert(S, Condition, ErrorMsg) {
  */
 export function AssertStackLength(S, Needed) {
   if (S.Stack.length < Needed)
-  ThrowRuntimeExc(S, "Not enough values on stack."
-    + `\n\tExpected: '${Needed}'\n\tGot: '${S.Stack.length}'`);
+    ThrowRuntimeException(S, "ERT_1002", Needed, S.Stack.length);
 }
 
 
@@ -74,7 +147,7 @@ export function HandleCharacterEscaping(S, AllCode) {
     const MatchIndex = AllCode.indexOf("\\", PreviousIndex + 2);
     if (MatchIndex == -1) break;
     if (MatchIndex + 1 == AllCode.length)
-      ThrowRuntimeExc(S, `Expected escape character, got end of string`);
+      ThrowRuntimeException(S, "XM_1001");
     NewCode += AllCode.slice(PreviousIndex, MatchIndex);
     PreviousIndex = MatchIndex;
     switch (AllCode[MatchIndex + 1]) {
@@ -100,7 +173,7 @@ export function HandleCharacterEscaping(S, AllCode) {
         AllCode = AllCode.slice(MatchIndex + 3);
         continue theLoop;
       default:
-        ThrowRuntimeExc(S, `Non-existent special character: '\\${AllCode[MatchIndex + 1]}'`);
+        ThrowRuntimeException(S, "XM_1002", AllCode[MatchIndex + 1]);
     }
   }
   NewCode += AllCode.slice(PreviousIndex, AllCode.length);
@@ -112,8 +185,8 @@ export function HandleCharacterEscaping(S, AllCode) {
 /**
  * Смешивает словари.
  * Если слова повторяются - выбирается то, что будет в последем словаре.
- * @param {...LLL_Dictionary} Dicts 
- * @returns {LLL_Dictionary}
+ * @param {...Dictionary} Dicts 
+ * @returns {Dictionary}
  */
 export function MergeDictionaries_(...Dicts) {
   const ResultingEntries = [];

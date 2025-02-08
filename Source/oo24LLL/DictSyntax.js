@@ -1,14 +1,14 @@
-import { WordDefinitionFragment } from "./TheMachine.js";
 import * as aux from "./aAux.js";
 import * as CoGr from "./CommonGrammar.js";
+import { __Any } from "../Utils-typed.js";
 
-const _AllComplexConstructions = Object.values(CoGr.Constrct);
+
 
 /**
  * @internal
  * Словарь СЛОВ СИНТАКСИСА.
  * 
- * @type {LLL_Dictionary}
+ * @type {Dictionary}
  */
 export default new Map(Object.entries({
   [CoGr.Instr.DEFINE_VAR]: (S) => {
@@ -21,8 +21,11 @@ export default new Map(Object.entries({
   [CoGr.Constrct.DEFINE_FUNC]: (S) => {
     aux.AssertStackLength(S, 1);
     const VarName = aux.Pop_String(S);
-    const Bounds = InterpretCodeblock(S, VarName);
-    S.UserDict.set(VarName, Bounds);
+    const Fragment = S.StateStorage.PostBlock;
+    aux.Assert(S, Fragment != null,
+      "LLL RuntimeException", "XRT_i103");
+    Fragment.Label = VarName;
+    S.UserDict.set(VarName, Fragment);
   },
 
   [CoGr.Instr.DELETE_DEFINITION]: (S) => {
@@ -30,33 +33,13 @@ export default new Map(Object.entries({
     const VarName = aux.Pop_String(S);
     S.UserDict.delete(VarName);
   },
+  
+  [CoGr.Constrct.LOOP]: (S) => {
+    
+  },
 
 }));
 
 
 
-/**
- * @param {LLL_STATE} S 
- * @param {string} Label 
- * @returns {WordDefinitionFragment}
- */
-function InterpretCodeblock(S, Label) {
-  S.AdditionalLocationInfo = Label;
-  const StartPos = S.TheReader.Pos;
-  let EndPos = 0;
-  let Depth = 0;
-  while (!S.TheReader.IsCodeEnd) {
-    const Instruction = S.TheReader.GrabUnit();
-    if (_AllComplexConstructions.includes(Instruction))
-      Depth++;
-    else if (Instruction == CoGr.INSTR_END_OF_BLOCK) {
-      if (Depth == 0) break;
-      Depth--;
-    }
-    EndPos = S.TheReader.Pos - 1;
-  }
 
-  if (S.TheReader.IsCodeEnd) aux.ThrowRuntimeExc(S, "Expected end of the block.");
-  S.AdditionalLocationInfo = null;
-  return new WordDefinitionFragment(StartPos, EndPos);
-}
