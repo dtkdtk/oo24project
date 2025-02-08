@@ -5,6 +5,7 @@ export * from "./oo24LLL/AuxStateTrace.js";
 export * from "./oo24LLL/CommonGrammar.js";
 export * from "./oo24LLL/DictStd.js";
 export * from "./oo24LLL/DictSyntax.js";
+export * from "./oo24LLL/Errors.js";
 export * from "./oo24LLL/TheMachine.js";
 export * from "./oo24LLL/Interpreter.js";
 export * from "./oo24LLL/aAux.js";
