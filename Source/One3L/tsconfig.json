@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": [
+    "One3L.ts",
+  ],
+  "exclude": ["**/*.js"],
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+    "outDir": "./",
+    "noEmit": false,
+    "resolveJsonModule": false,
+    "moduleResolution": "node",
+    "module": "None",
+    "target": "ES2020",
+    "downlevelIteration": true,
+  }
+}
