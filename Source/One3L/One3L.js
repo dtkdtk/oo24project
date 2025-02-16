@@ -189,7 +189,7 @@ function LoadStdDefinitions(TheState) {
         S.Stack.push(BUILD);
     });
     TheState.Dict.set("Current_Interpreter_Name", (S) => {
-        S.Stack.push("One3L-js");
+        S.Stack.push("One3L.js");
     });
     TheState.Dict.set("dup", (S) => {
         const Value = S.Stack.at(-1);

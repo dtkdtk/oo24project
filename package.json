@@ -1,8 +1,9 @@
 {
   "type": "module",
   "name": "oo24project",
-  "version": "0.0.4",
-  "description": "[TOY] Assembler-like language written in JavaScript",
+  "version": "0.0.5",
+  "build": 5,
+  "description": "[TOY] Forth-like language",
   "main": "Source/oo24-cli.js",
   "scripts": {
     "test": "node ./Tests/oo24LLL/_AllTests.js",

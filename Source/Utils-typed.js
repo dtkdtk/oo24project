@@ -32,3 +32,15 @@ export function Labelled(xLabel, Origin) {
   Origin.xLabel = xLabel;
   return Origin;
 }
+
+export function OKeysOf(O) {
+  return Object.keys(O);
+}
+
+export function OValuesOf(O) {
+  return Object.values(O);
+}
+
+export function OEntriesOf(O) {
+  return Object.entries(O);
+}

@@ -1,5 +1,5 @@
 import { GetStateTrace } from "./AuxStateTrace.js";
-import { Errors } from "./Errors.js";
+import { Errors, Warnings } from "./Errors.js";
 
 export * from "./AuxStateTrace.js";
 export * from "./AuxTyping.js";
@@ -50,14 +50,15 @@ export function ThrowSyntaxError(S, ECode, ...Args) {
 
 /**
  * Отправляет предупреждение в `stderr`.
- * @template {KnownExceptionCode} _ECodeTy
+ * @template {KnownWarningCode} _ECodeTy
  * @param {LLL_STATE} S 
  * @param {_ECodeTy} ECode 
- * @param {Parameters<(typeof Errors)[_ECodeTy]>} Args 
+ * @param {Parameters<(typeof Warnings)[_ECodeTy]>} Args 
  */
 export function EmitWarning(S, ECode, ...Args) {
+  if (S.StateStorage.IgnoredWarnings.has(ECode) || S.StateStorage.IgnoredWarnings.has("*")) return;
   /** @type {(...args: any[]) => string} */
-  const Fn = Errors[ECode];
+  const Fn = Warnings[ECode];
   const Msg = Fn(...Args);
   S.StdERR(`LLL Warning: ${Msg}` + _GetErrAppendix(S) + `\t\nErrCode: [${ECode}]` + "\n");
 }
@@ -122,7 +123,7 @@ export function Assert(S, Condition, EClass, ECode, ...Args) {
  */
 export function AssertStackLength(S, Needed) {
   if (S.Stack.length < Needed)
-    ThrowRuntimeException(S, "ERT_1002", Needed, S.Stack.length);
+    ThrowRuntimeError(S, "ERT_1002", Needed, S.Stack.length);
 }
 
 

@@ -130,6 +130,19 @@ export function RemoveSuffix(Str, Suffix) {
     return Str.slice(0, Index);
 }
 
+/**
+ * @param {string} Str 
+ * @param {string} Prefix 
+ * @returns {string}
+ */
+export function RemovePrefix(Str, Prefix) {
+  const Index = Str.indexOf(Prefix);
+  if (Index == -1)
+    return Str;
+  else
+    return Str.slice(Index);
+}
+
 
 
 /**

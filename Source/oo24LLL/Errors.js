@@ -13,9 +13,9 @@ export const Errors = {
 
   ESX_p102: () => `Expected an explicit end of the Prelude (because the beginning is explicitly specified).`,
 
-  ESX_p103: () => `Expected 'META'-property key.`,
+  ESX_p103: () => `Expected metadata-property key.`,
 
-  ESX_p104: () => `Expected 'META'-property value.`,
+  ESX_p104: () => `Expected metadata-property value.`,
 
   ESX_p105: () => `Expected '${CoGr.Prelude.STRTABLE_ELEMENT_END}' at end of string.`,
 
@@ -27,6 +27,10 @@ export const Errors = {
   /* --- */
 
   ESX_1001: () => `Expected end of the block.`,
+
+  ESX_1002: () => `'${CoGr.Instr.LOOP_RESTART}' instruction outside the loop.`,
+
+  ESX_1003: () => `'${CoGr.Instr.LOOP_BREAK}' instruction outside the loop.`,
 
 
 
@@ -79,17 +83,19 @@ export const Errors = {
   /** @param {any} Value */
   XM_1003: (Value) => `The given value cannot be converted to Integer/Float.\n\tValue: '${Value}'`,
 
+};
 
-
-
-
-
-
-
-
-  /*====== WARNINGS ======*/
-
+export const Warnings = {
   /** @param {LLL_STATE} S */
   W_1001: (S) => `When the program exits, the stack must be empty.\n\tStack:\n`
     + aux.GetStateTrace.Stack(S),
 };
+
+
+
+/**
+ * Предупреждения, включённые по умолчанию.
+ * Только критические.
+ * @type {readonly KnownWarningCode[]}
+ */
+export const DefaultWarnings = [];

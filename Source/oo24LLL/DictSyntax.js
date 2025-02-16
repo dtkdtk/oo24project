@@ -1,6 +1,8 @@
 import * as aux from "./aAux.js";
 import * as CoGr from "./CommonGrammar.js";
 import { __Any } from "../Utils-typed.js";
+import { InterpretWord } from "./Interpreter.js";
+import { LoopBodyFragment } from "./TheMachine.js";
 
 
 
@@ -35,11 +37,41 @@ export default new Map(Object.entries({
   },
   
   [CoGr.Constrct.LOOP]: (S) => {
-    
+    const Fragment = S.StateStorage.PostBlock;
+    aux.Assert(S, Fragment != null,
+      "LLL RuntimeException", "XRT_i103");
+    const LoopBody = new LoopBodyFragment(Fragment.Words, Fragment.Label);
+    LoopEngine(S, LoopBody);
+  },
+
+  [CoGr.Instr.LOOP_RESTART]: (S) => {
+    aux.Assert(S, S.StateStorage.LoopsStack.length > 0,
+      "LLL SyntaxError", "ESX_1002");
+    S.StateStorage.LoopsStack.peek().Pos = 0;
+  },
+
+  [CoGr.Instr.LOOP_BREAK]: (S) => {
+    aux.Assert(S, S.StateStorage.LoopsStack.length > 0,
+      "LLL SyntaxError", "ESX_1003");
+    S.StateStorage.LoopsStack.peek().Available = false;
   },
 
 }));
 
 
 
-
+/**
+ * Отвечает за исполнение (интерпретацию) цикла.
+ * @param {LLL_STATE} S 
+ * @param {LoopBodyFragment} LoopBody 
+ */
+function LoopEngine(S, LoopBody) {
+  S.StateStorage.LoopsStack.push(LoopBody);
+  while (LoopBody.Available) {
+    const Word = LoopBody.Words[LoopBody.Pos++];
+    InterpretWord(S, Word);
+    if (LoopBody.Pos == LoopBody.Words.length)
+      LoopBody.Pos = 0;
+  }
+  S.StateStorage.LoopsStack.pop();
+}

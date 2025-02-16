@@ -9,8 +9,8 @@ libTest.test("hello world + metadata", () => {
   const S = new LLL_STATE();
   S.StdOUT = TransparentStdOUT.AsInjection();
   LLL_EXECUTE(`
-META Owner: dtkdtk0
-META Version v1.0.67
+GLOBAL_META Owner: dtkdtk0
+GLOBAL_META Version v1.0.67
 
 STRINGS_TABLE...
 

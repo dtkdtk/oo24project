@@ -36,7 +36,10 @@ export const Prelude = {
   EXPLICIT_END_PRELUDE: "...END_PRELUDE",
 
   /** @readonly */
-  META: "META",
+  META_GLOBAL: "GLOBAL_META",
+
+  /** @readonly */
+  META_FILE: "FILE_META",
 
   /** @readonly */
   STRTABLE_START: "STRINGS_TABLE...",

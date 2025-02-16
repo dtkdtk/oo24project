@@ -42,7 +42,7 @@ function InterpretPrelude(S) {
     const Instruction = S.TheReader.GrabUnit();
     if (S.TheReader.IsCodeEnd) return;
     switch (Instruction) {
-      case CoGr.Prelude.META: {
+      case CoGr.Prelude.META_GLOBAL: {
         let PropertyKey = S.TheReader.GrabUnit();
         if (S.TheReader.IsCodeEnd)
           aux.ThrowSyntaxError(S, "ESX_p103");
@@ -59,6 +59,9 @@ function InterpretPrelude(S) {
 
         S.ScriptMetadata[PropertyKey] = PropertyValue;
         break;
+      }
+      case CoGr.Prelude.META_FILE: {
+        //TODO
       }
       case CoGr.Prelude.STRTABLE_START: {
         InterpretStringsTable(S);
@@ -116,7 +119,7 @@ function InterpretStringsTable(S) {
           Content += "\n"
         Content += Line;
       }
-      aux.ThrowRuntimeException(S, "ESX_p105");
+      aux.ThrowSyntaxError(S, "ESX_p105");
     }
     else if (Line == CoGr.Prelude.STRTABLE_END) {
       S.TheReader.Options.HandleCommentLines = true;
@@ -127,9 +130,9 @@ function InterpretStringsTable(S) {
       return;
     }
     else
-      aux.ThrowRuntimeException(S, "ESX_p106", Line);
+      aux.ThrowSyntaxError(S, "ESX_p106", Line);
   }
-  aux.ThrowRuntimeException(S, "ESX_p107");
+  aux.ThrowSyntaxError(S, "ESX_p107");
 }
 
 
@@ -140,7 +143,7 @@ function InterpretStringsTable(S) {
  * @param {string} Word 
  * @returns {void}
  */
-function InterpretWord(S, Word) {
+export function InterpretWord(S, Word) {
   if (Word.length > 1 && Word.startsWith('"') && Word.endsWith('"')) {
     const Handled = aux.Unquote_(Word);
     S.Stack.push(Handled); //не ищем определение
@@ -155,20 +158,22 @@ function InterpretWord(S, Word) {
   const Definition = _SearchForDefinition(S, Word);
 
   if (Word.endsWith("...")) {
-    const CodeFragment = ParseCodeblock(S, null);
-    S.StateStorage.PostBlock = CodeFragment;
-    if (typeof Definition == "function")
+    if (typeof Definition == "function") {
+      const CodeFragment = ParseCodeblock(S, null);
+      S.StateStorage.PostBlock = CodeFragment;
       Definition(S);
+    }
+    else if (Definition === undefined)
+      aux.ThrowRuntimeError(S, "ERT_1001", Word);
     else
-      aux.ThrowRuntimeException(S, "ERT_1003", Word, typeof Definition);
+      aux.ThrowRuntimeError(S, "ERT_1003", Word, typeof Definition);
     S.StateStorage.PostBlock = null;
     return;
   }
 
   switch (typeof Definition) {
-    case "undefined": //не нашли, ищем дальше
-      //не нашли определение ни в одном "замыкании"
-      aux.ThrowRuntimeException(S, "ERT_1001", Word);
+    case "undefined"://не нашли определение ни в одном "замыкании"
+      aux.ThrowRuntimeError(S, "ERT_1001", Word);
 
     case "number": //это числовое значение => уверенно кидаем в стек
     case "string": //нашли строку / НЕленивое значение
@@ -212,6 +217,11 @@ function InterpretMainCode(S) {
 const _AllComplexConstructions = Object.values(CoGr.Constrct);
 
 /**
+ * Не исполняя, читает следующие слова до конца блока кода.
+ * Поддержка глубины присутствует.
+ * 
+ * Берёт слова **исключительно из Читателя**, т.е. нет возможности
+ *  парсить произвольный кусок кода или "прыгать" по коду.
  * @param {LLL_STATE} S 
  * @param {string | null} Label 
  * @returns {CodeFragment}
@@ -219,50 +229,52 @@ const _AllComplexConstructions = Object.values(CoGr.Constrct);
 function ParseCodeblock(S, Label) {
   S.AdditionalLocationInfo = Label;
   Label = _MakeLabel(S, Label);
-  S.PseudoScope.push(Label);
+  S.StateStorage.PseudoScope.push(Label);
   const Definition = new CodeFragment([], Label);
   let Depth = 0;
   while (true) {
+    if (S.TheReader.IsCodeEnd)
+      aux.ThrowSyntaxError(S, "ESX_1001");
     const Word = S.TheReader.GrabUnit();
     if (Word == CoGr.INSTR_END_OF_BLOCK) {
       if (Depth == 0) break;
       Depth--;
     }
-    if (S.TheReader.IsCodeEnd)
-      aux.ThrowRuntimeException(S, "ESX_1001");
     
     if (_AllComplexConstructions.includes(Word)) {
       Depth++;
       let MaybeInnerLabel = libUtilsTy.__Any;
       if (Word == CoGr.Constrct.DEFINE_FUNC) //или любая другая именованная конструкция
         MaybeInnerLabel = Definition.Words.pop();
-      const InnerDefinition = ParseCodeblock(S, _MakeLabel(S, MaybeInnerLabel));
+      /*const InnerDefinition = ParseCodeblock(S, _MakeLabel(S, MaybeInnerLabel));
       Definition.Words.push(...InnerDefinition.Words);
+      Depth--;*/
+      Definition.Words.push(Word);
     }
     else
       Definition.Words.push(Word);
   }
 
   S.AdditionalLocationInfo = null;
-  S.PseudoScope.pop();
+  S.StateStorage.PseudoScope.pop();
   return Definition;
 }
 
 
 
 /**
- * 
+ * Исполняет указанный фрагмент кода.
  * @param {LLL_STATE} S 
  * @param {CodeFragment} Block 
  */
 function RecursivelyInterpretCodeblock(S, Block) {
-  S.PseudoScope.push(Block.Label);
+  S.StateStorage.PseudoScope.push(Block.Label);
   for (const W of Block.Words)
     if (typeof W == "string")
       InterpretWord(S, W);
     else
       RecursivelyInterpretCodeblock(S, W);
-  S.PseudoScope.pop();
+  S.StateStorage.PseudoScope.pop();
 }
 
 
@@ -290,7 +302,7 @@ function _SearchForDefinition(S, Word) {
   //TODO: Оптимизировать. Можно сделать сначала полную строку, а потом "снимать слои" с неё.
   const MaybePrimordialDefinition = S.PrimordialDict.get(Word);
   if (MaybePrimordialDefinition) return MaybePrimordialDefinition;
-  const CurrentScope = [...S.PseudoScope];
+  const CurrentScope = [...S.StateStorage.PseudoScope];
   while (CurrentScope.length > 0) {
     const FullScope = CurrentScope.join(CoGr.TK_SCOPE_SEPARATOR);
     const FullWord = FullScope + CoGr.TK_SCOPE_SEPARATOR + Word;

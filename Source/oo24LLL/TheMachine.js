@@ -4,6 +4,9 @@ import * as CoGr from "./CommonGrammar.js";
 import DictStd from "./DictStd.js";
 import DictSyntax from "./DictSyntax.js";
 import { MergeDictionaries_ } from "./aAux.js";
+import { DefaultWarnings, Warnings } from "./Errors.js";
+import DictOperators from "./DictOperators.js";
+import DictStdVars from "./DictStdVars.js";
 
 
 
@@ -33,13 +36,6 @@ export class LLL_STATE {
   Stack = libUtilsTy.IStack.create();
 
   /**
-   * Имитация текущей области видимости.
-   * @type {string[]} это 'IStack' так-то, однако нам нужны методы массивов.
-   * @readonly
-   */
-  PseudoScope = [];
-
-  /**
    * Словарь **пользовательских** определений.
    * Напоминаю, что никаких областей видимости на самом деле не существует, и структура словаря плоская.
    * 
@@ -57,7 +53,7 @@ export class LLL_STATE {
    * @type {ConstDict}
    * @readonly
    */
-  PrimordialDict = MergeDictionaries_(DictSyntax, DictStd);
+  PrimordialDict = MergeDictionaries_(DictSyntax, DictOperators, DictStd, DictStdVars);
 
   /**
    * Хранилище дополнительных состояний интерпретатора.
@@ -73,6 +69,37 @@ export class LLL_STATE {
      * @type {CodeFragment | null}
      */
     PostBlock: null,
+
+    /**
+     * Имитация текущей области видимости.
+     * @type {string[]} это 'IStack' так-то, однако нам нужны методы массивов.
+     * @readonly
+     */
+    PseudoScope: [],
+
+    /**
+     * Игнорируемые коды предупреждений.
+     * @type {Set<string>} для обратной совместимости выбран тип `string`.
+     *  Если кода предупреждения не существует - ничего не происходит.
+     * @readonly
+     */
+    IgnoredWarnings: new Set(_NotDefaultWarnCodes()),
+
+    /**
+     * Стек выполнения циклов.
+     * @type {libUtilsTy.IStack<LoopBodyFragment>}
+     * @readonly
+     */
+    LoopsStack: libUtilsTy.IStack.create(),
+
+    /**
+     * Стек контекстов интерпретации.
+     * Грубо говоря, это стек Читателей, специализированных
+     *  под чтение конкретного участка кода.
+     * @type {libUtilsTy.IStack<LoopBodyFragment>}
+     * @readonly
+     */
+    InterpreterContexts: libUtilsTy.IStack.create(),
   };
 
   ScriptFullPath = "no-file";
@@ -102,7 +129,7 @@ export class LLL_STATE {
    * Читатель, связанный с данным состоянием LLL.
    * @type {TheReader}
    */
-  TheReader = libUtilsTy.__Any;
+  //TheReader = libUtilsTy.__Any;
 
   /**
    * Обработчик ошибок (исключений) **на уровне платформы.**
@@ -231,7 +258,7 @@ export class TheReader {
       const Tk = this.#AllCode[this.Pos];
       this.Pos++;
 
-      let CurrentStatus = this.#MaybeHandle_Newline(Tk)
+      const CurrentStatus = this.#MaybeHandle_Newline(Tk)
         || this.#MaybeHandle_String(Tk)
         || this.#MaybeHandle_CommentLine(Tk)
         || this.#MaybeHandle_InlineComment(Tk)
@@ -291,6 +318,7 @@ export class TheReader {
     if (Tk == "\n") {
       this.LineIndex++;
       this.Column = 0; //increment'им в основном цикле
+      this.#InternalState.CommentLine = false;
       if (this.#Buf.length > 0 && this.Options.DrainOnNewline)
         return _HandleTokenResult.DRAIN_BUF;
       return _HandleTokenResult.SKIP_TOKEN;
@@ -341,14 +369,10 @@ export class TheReader {
     if (!this.Options.HandleCommentLines)
       return _HandleTokenResult.CONTINUE;
 
-    if (!this.#InternalState.InlineComment && Tk == CoGr.TK_COMMENT_LINE_START_A || Tk == CoGr.TK_COMMENT_LINE_START_B) { //начало коммента
+    if (!this.#InternalState.InlineComment
+      && (Tk == CoGr.TK_COMMENT_LINE_START_A || Tk == CoGr.TK_COMMENT_LINE_START_B)
+    ) { //начало коммента
       this.#InternalState.CommentLine = true;
-      return _HandleTokenResult.SKIP_TOKEN;
-    }
-    if (Tk == "\n") { //конец коммента
-      this.#InternalState.CommentLine = false;
-      if (this.#Buf.length > 0 && this.Options.DrainOnNewline)
-        return _HandleTokenResult.DRAIN_BUF; //начало строчного комментария = переход на новую строку.
       return _HandleTokenResult.SKIP_TOKEN;
     }
     if (this.#InternalState.CommentLine)
@@ -396,36 +420,37 @@ export class TheReader {
 
 
 export class CodeFragment {
-  /** @type {(string | CodeFragment)[]} */
+  /** @type {string[]} */
   Words;
 
   /** @type {string} */
   Label;
 
   /**
-   * (НЕ РЕКУРСИВНО) Превращает текущее определение в самый обычный массив слов,
-   *  сохраняя (псевдо-) области видимости.
-   * @mutates
-   */
-  MakeFlat() {
-    for (let i = 0; i < this.Words.length; i++) {
-      const W = this.Words[i];
-      if (typeof W == "object")
-      this.Words.splice(i, 1, ...[
-        this.Label,
-        CoGr.Instr.EnterScope,
-        ...W.Words,
-        CoGr.Instr.ExitScope,
-      ]);
-    }
-  }
-
-  /**
-   * @param {(string | CodeFragment)[]} Words 
+   * @param {string[]} Words 
    * @param {string} Label 
    */
   constructor(Words, Label) {
     this.Words = Words;
     this.Label = Label;
   }
+}
+
+export class LoopBodyFragment extends CodeFragment {
+  /** Индекс интерпретируемого в данный момент слова. */
+  Pos = 0;
+
+  Available = true;
+}
+
+
+
+/**
+ * Возвращает те коды предупреждений, которые НЕ ВКЛЮЧЕНЫ по умолчанию.
+ * @returns {KnownWarningCode[]}
+ */
+function _NotDefaultWarnCodes() {
+  const AllWarnings = libUtilsTy.OKeysOf(Warnings);
+  const NotDefault = AllWarnings.filter(it => !DefaultWarnings.includes(it));
+  return NotDefault;
 }

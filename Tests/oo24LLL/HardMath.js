@@ -5,7 +5,7 @@ const FIB_INDEX = 48;
 for (let _J = 0; _J < LOOPS_COUNT; _J++) {
   LLL_EXECUTE(`
     0 1 1             ;1,2,3
-    dupsub dup sum    ;4
-    ${"dupsub dupsub sum (nl)".repeat(FIB_INDEX - 4)}
+    dupsub dup [+]    ;4
+    ${"dupsub dupsub [+] (nl)".repeat(FIB_INDEX - 4)}
   `);
 }
