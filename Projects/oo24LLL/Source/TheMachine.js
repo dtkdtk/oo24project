@@ -1,5 +1,5 @@
 import "./Types.js";
-import * as libUtilsTy from "../Utils-typed.js";
+import * as libUtilsTy from "../../Utils-typed.js";
 import * as CoGr from "./CommonGrammar.js";
 import DictStd from "./DictStd.js";
 import DictSyntax from "./DictSyntax.js";

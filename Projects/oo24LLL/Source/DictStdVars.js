@@ -1,5 +1,5 @@
-import GetJson from "../GetJson.js";
-const PkgJson = GetJson("./package.json");
+import GetJson from "../../GetJson.js";
+const PkgJson = GetJson("./Projects/oo24LLL/package.json");
 
 /**
  * @internal

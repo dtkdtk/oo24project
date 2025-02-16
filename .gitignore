@@ -1,6 +1,6 @@
 /Out/
-/SANDBOX.js
-/Benchmarks/Asset_*
+__TEST__.*
+/Benchmarks/**/Asset_*
 
 # Logs
 logs

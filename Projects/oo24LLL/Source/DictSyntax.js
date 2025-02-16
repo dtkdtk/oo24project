@@ -1,6 +1,6 @@
 import * as aux from "./aAux.js";
 import * as CoGr from "./CommonGrammar.js";
-import { __Any } from "../Utils-typed.js";
+import { __Any } from "../../Utils-typed.js";
 import { InterpretWord } from "./Interpreter.js";
 import { LoopBodyFragment, LoopContext } from "./TheMachine.js";
 

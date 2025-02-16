@@ -1,7 +1,7 @@
 import { LLL_STATE, TheReader, CodeFragment } from "./TheMachine.js";
 import * as aux from "./aAux.js";
 import * as CoGr from "./CommonGrammar.js";
-import * as libUtilsTy from "../Utils-typed.js";
+import * as libUtilsTy from "../../Utils-typed.js";
 
 
 
