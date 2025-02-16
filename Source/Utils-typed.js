@@ -44,3 +44,7 @@ export function OValuesOf(O) {
 export function OEntriesOf(O) {
   return Object.entries(O);
 }
+
+export function OAssign(Dest, Source) {
+  Object.assign(Dest, Source);
+}

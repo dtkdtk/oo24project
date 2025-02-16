@@ -21,3 +21,8 @@ declare type LLL_Value = string | number; //Доступные в данный �
 declare type LLL_Definition = LLL_Value | NativeJsFunction | CodeFragment;
 declare type Dictionary = Map<string, LLL_Definition>;
 declare type ConstDict = ReadonlyMap<string, LLL_Definition>;
+
+declare interface InterpretingContext {
+  IsCodeEnd: boolean;
+  GrabUnit(): string;
+}

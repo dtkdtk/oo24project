@@ -56,7 +56,7 @@ export function ThrowSyntaxError(S, ECode, ...Args) {
  * @param {Parameters<(typeof Warnings)[_ECodeTy]>} Args 
  */
 export function EmitWarning(S, ECode, ...Args) {
-  if (S.StateStorage.IgnoredWarnings.has(ECode) || S.StateStorage.IgnoredWarnings.has("*")) return;
+  if (S.RuntimeStateStorage.IgnoredWarnings.has(ECode) || S.RuntimeStateStorage.IgnoredWarnings.has("*")) return;
   /** @type {(...args: any[]) => string} */
   const Fn = Warnings[ECode];
   const Msg = Fn(...Args);

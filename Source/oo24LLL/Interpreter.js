@@ -12,11 +12,12 @@ export function LLL_EXECUTE(AllCode, S = new LLL_STATE()) {
   if (AllCode.length == 0) return;
   const Reader = new TheReader(AllCode);
   S.TheReader = Reader;
+  S.RuntimeStateStorage.InterpreterContexts.push(Reader);
 
   InterpretPrelude(S);
   if (S.TheReader.IsCodeEnd) return;
 
-  InterpretMainCode(S);
+  InterpretContext(S);
   if (S.Stack.length > 0) {
     aux.EmitWarning(S, "W_1001", S);
   }
@@ -160,14 +161,14 @@ export function InterpretWord(S, Word) {
   if (Word.endsWith("...")) {
     if (typeof Definition == "function") {
       const CodeFragment = ParseCodeblock(S, null);
-      S.StateStorage.PostBlock = CodeFragment;
+      S.RuntimeStateStorage.PostBlock = CodeFragment;
       Definition(S);
     }
     else if (Definition === undefined)
       aux.ThrowRuntimeError(S, "ERT_1001", Word);
     else
       aux.ThrowRuntimeError(S, "ERT_1003", Word, typeof Definition);
-    S.StateStorage.PostBlock = null;
+    S.RuntimeStateStorage.PostBlock = null;
     return;
   }
 
@@ -200,14 +201,15 @@ export function InterpretWord(S, Word) {
 
 
 /**
- * Интерпретатор **И ИСПОЛНИТЕЛЬ** основной части кода.
+ * Интерпретатор **И ИСПОЛНИТЕЛЬ** текущего контекста.
  * @param {LLL_STATE} S 
  */
-function InterpretMainCode(S) {
+export function InterpretContext(S) {
   S.AdditionalLocationInfo = null;
+  const Context = S.RuntimeStateStorage.InterpreterContexts.peek();
   while (true) {
-    const Word = S.TheReader.GrabUnit();
-    if (S.TheReader.IsCodeEnd) break;
+    const Word = Context.GrabUnit();
+    if (Context.IsCodeEnd) break;
     InterpretWord(S, Word);
   }
 }
@@ -219,23 +221,21 @@ const _AllComplexConstructions = Object.values(CoGr.Constrct);
 /**
  * Не исполняя, читает следующие слова до конца блока кода.
  * Поддержка глубины присутствует.
- * 
- * Берёт слова **исключительно из Читателя**, т.е. нет возможности
- *  парсить произвольный кусок кода или "прыгать" по коду.
  * @param {LLL_STATE} S 
  * @param {string | null} Label 
  * @returns {CodeFragment}
  */
 function ParseCodeblock(S, Label) {
+  const Context = S.RuntimeStateStorage.InterpreterContexts.peek();
   S.AdditionalLocationInfo = Label;
   Label = _MakeLabel(S, Label);
-  S.StateStorage.PseudoScope.push(Label);
+  S.RuntimeStateStorage.PseudoScope.push(Label);
   const Definition = new CodeFragment([], Label);
   let Depth = 0;
   while (true) {
-    if (S.TheReader.IsCodeEnd)
+    if (Context.IsCodeEnd)
       aux.ThrowSyntaxError(S, "ESX_1001");
-    const Word = S.TheReader.GrabUnit();
+    const Word = Context.GrabUnit();
     if (Word == CoGr.INSTR_END_OF_BLOCK) {
       if (Depth == 0) break;
       Depth--;
@@ -256,7 +256,7 @@ function ParseCodeblock(S, Label) {
   }
 
   S.AdditionalLocationInfo = null;
-  S.StateStorage.PseudoScope.pop();
+  S.RuntimeStateStorage.PseudoScope.pop();
   return Definition;
 }
 
@@ -268,13 +268,13 @@ function ParseCodeblock(S, Label) {
  * @param {CodeFragment} Block 
  */
 function RecursivelyInterpretCodeblock(S, Block) {
-  S.StateStorage.PseudoScope.push(Block.Label);
+  S.RuntimeStateStorage.PseudoScope.push(Block.Label);
   for (const W of Block.Words)
     if (typeof W == "string")
       InterpretWord(S, W);
     else
       RecursivelyInterpretCodeblock(S, W);
-  S.StateStorage.PseudoScope.pop();
+  S.RuntimeStateStorage.PseudoScope.pop();
 }
 
 
@@ -286,7 +286,7 @@ function RecursivelyInterpretCodeblock(S, Block) {
  */
 function _MakeLabel(S, MaybeLabel) {
   return MaybeLabel
-    ?? CoGr.MakeIntrinsic("AnonymScope:" + S.StateStorage._CurrentSymbolIndex++);
+    ?? CoGr.MakeIntrinsic("AnonymScope:" + S.RuntimeStateStorage._CurrentSymbolIndex++);
 }
 
 
@@ -302,7 +302,7 @@ function _SearchForDefinition(S, Word) {
   //TODO: Оптимизировать. Можно сделать сначала полную строку, а потом "снимать слои" с неё.
   const MaybePrimordialDefinition = S.PrimordialDict.get(Word);
   if (MaybePrimordialDefinition) return MaybePrimordialDefinition;
-  const CurrentScope = [...S.StateStorage.PseudoScope];
+  const CurrentScope = [...S.RuntimeStateStorage.PseudoScope];
   while (CurrentScope.length > 0) {
     const FullScope = CurrentScope.join(CoGr.TK_SCOPE_SEPARATOR);
     const FullWord = FullScope + CoGr.TK_SCOPE_SEPARATOR + Word;

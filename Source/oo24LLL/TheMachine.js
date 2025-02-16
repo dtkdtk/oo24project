@@ -59,7 +59,7 @@ export class LLL_STATE {
    * Хранилище дополнительных состояний интерпретатора.
    * @readonly
    */
-  StateStorage = {
+  RuntimeStateStorage = {
     /** Свободный номер для анонимных областей видимости. */
     _CurrentSymbolIndex: 1,
 
@@ -96,7 +96,7 @@ export class LLL_STATE {
      * Стек контекстов интерпретации.
      * Грубо говоря, это стек Читателей, специализированных
      *  под чтение конкретного участка кода.
-     * @type {libUtilsTy.IStack<LoopBodyFragment>}
+     * @type {libUtilsTy.IStack<InterpretingContext>}
      * @readonly
      */
     InterpreterContexts: libUtilsTy.IStack.create(),
@@ -129,7 +129,7 @@ export class LLL_STATE {
    * Читатель, связанный с данным состоянием LLL.
    * @type {TheReader}
    */
-  //TheReader = libUtilsTy.__Any;
+  TheReader = libUtilsTy.__Any;
 
   /**
    * Обработчик ошибок (исключений) **на уровне платформы.**
@@ -157,6 +157,7 @@ const _HandleTokenResult = {
 /**
  * Читатель кода.
  * Специализирован под LLL (подверает код начальной обработке).
+ * @implements {InterpretingContext}
  */
 export class TheReader {
 
@@ -441,6 +442,30 @@ export class LoopBodyFragment extends CodeFragment {
   Pos = 0;
 
   Available = true;
+}
+
+/**
+ * @implements {InterpretingContext}
+ */
+export class LoopContext {
+  /** @type {LoopBodyFragment} */
+  LoopBody;
+  IsCodeEnd = false;
+  GrabUnit() {
+    if (this.LoopBody.Pos == this.LoopBody.Words.length) {
+      this.IsCodeEnd = true;
+      return libUtilsTy.__Any;
+    }
+    const Word = this.LoopBody.Words[this.LoopBody.Pos++];
+    return Word;
+  }
+
+  /**
+   * @param {LoopBodyFragment} LoopBody 
+   */
+  constructor(LoopBody) {
+    this.LoopBody = LoopBody;
+  }
 }
 
 

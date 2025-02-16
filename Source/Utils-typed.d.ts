@@ -40,3 +40,9 @@ export function OValuesOf<_TyObj extends object>(O: _TyObj): (_TyObj[keyof _TyOb
  */
 export function OEntriesOf<_TyObj extends object>(O: _TyObj):
   | ({ [_vKey in keyof _TyObj]: [_vKey, _TyObj[_vKey]] }[keyof _TyObj])[];
+
+/**
+ * Типизированная версия `Object.assign()` без vararg и возвращаемого значения
+ */
+export function OAssign<_TyDest extends object, _TySource extends object>
+  (Dest: _TyDest, Source: _TySource): asserts Dest is (_TyDest & _TySource);

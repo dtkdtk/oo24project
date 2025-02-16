@@ -10,7 +10,7 @@ const TARGET_TERMINAL_WIDTH = 60;
  */
 GetStateTrace.Location = function(S) {
   let Buf = "\t";
-  Buf += S.StateStorage.PseudoScope.join("/") || "<top-level>";
+  Buf += S.RuntimeStateStorage.PseudoScope.join("/") || "<top-level>";
   Buf += "\n";
   return Buf;
 }

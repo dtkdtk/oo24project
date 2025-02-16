@@ -109,7 +109,7 @@ export default new Map(Object.entries({
   disable_warning: (S) => {
     aux.AssertStackLength(S, 1);
     const ECode = aux.Pop_String(S);
-    S.StateStorage.IgnoredWarnings.add(ECode);
+    S.RuntimeStateStorage.IgnoredWarnings.add(ECode);
   },
 
   /**
@@ -121,7 +121,7 @@ export default new Map(Object.entries({
   enable_warning: (S) => {
     aux.AssertStackLength(S, 1);
     const ECode = aux.Pop_String(S);
-    S.StateStorage.IgnoredWarnings.delete(ECode);
+    S.RuntimeStateStorage.IgnoredWarnings.delete(ECode);
   },
 
 }));
