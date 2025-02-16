@@ -1,5 +1,8 @@
 {
   "scripts": {
     "dev": "npx tsc --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4"
   }
 }

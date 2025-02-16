@@ -10,16 +10,16 @@
     "checkJs": true,
     "skipLibCheck": false,
 
+    "resolveJsonModule": true,
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
+    "target": "ESNext",
+    "lib": ["ESNext"],
+
     "strict": false,
     "strictNullChecks": true,
     "strictPropertyInitialization": true,
     "strictBindCallApply": true,
-    "strictBuiltinIteratorReturn": true,
     "strictFunctionTypes": true,
-
-    "resolveJsonModule": true,
-    "module": "NodeNext",
-    "moduleResolution": "nodenext",
-    "lib": ["ESNext"]
   }
 }

@@ -1,5 +1,4 @@
 {
-  "extends": "../../tsconfig.json",
   "include": [
     "One3L.ts",
   ],
@@ -9,10 +8,17 @@
     "checkJs": false,
     "outDir": "./",
     "noEmit": false,
+
     "resolveJsonModule": false,
-    "moduleResolution": "node",
     "module": "None",
-    "target": "ES2020",
-    "downlevelIteration": true,
+    "moduleResolution": "node",
+    "target": "ES6",
+    "lib": ["ES6"],
+
+    "strict": false,
+    "strictNullChecks": true,
+    "strictPropertyInitialization": true,
+    "strictBindCallApply": true,
+    "strictFunctionTypes": true,
   }
 }
